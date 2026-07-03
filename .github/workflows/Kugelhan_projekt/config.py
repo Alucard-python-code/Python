@@ -1,3 +1,4 @@
+#v1.2
 import machine
 import json
 

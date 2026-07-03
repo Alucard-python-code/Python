@@ -1,3 +1,4 @@
+#v1.2
 import machine
 import time
 from config import PIN_MOTOR_OPEN, PIN_MOTOR_CLOSE, PIN_LED_GREEN, PIN_LED_YELLOW, PIN_LED_RED, state, settings

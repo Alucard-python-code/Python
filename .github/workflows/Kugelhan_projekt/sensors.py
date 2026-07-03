@@ -1,3 +1,4 @@
+#v1.2
 import machine
 import time
 from config import PIN_POTI, PIN_MAX_CS, PIN_MAX_SCK, PIN_MAX_MOSI, PIN_MAX_MISO, state
