@@ -1,285 +1,400 @@
-#!/usr/bin/python
-# Importe der Module 
+# Schussbahn.py - v2.0 (GPIO-Direktverdrahtung)
 import sys
-from PyQt5.QtWidgets import QApplication, QWidget, QLabel, QPushButton
-from PyQt5.QtGui import QFont
-from PyQt5 import QtCore
-import RPi.GPIO as GPIO
+import os
+import logging
 import time
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QGridLayout, QVBoxLayout, QHBoxLayout, QProgressBar
+from PyQt5.QtGui import QFont
+from PyQt5.QtCore import Qt, QTimer
+import RPi.GPIO as GPIO
 
-# Festlegung der Pinnummerirung der GPIO`s
-GPIO.setmode(GPIO.BCM)
+from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log, PINS_OUT, PINS_IN
+from ui_dialogs import SettingsWindow
+from drive_worker import DriveThread
 
-# Festlegung der Ausgaenge
-# Schuetz_Schnell
-GPIO.setup(6, GPIO.OUT)
+try:
+    import __main__
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__main__.__file__)) if hasattr(__main__, '__file__') else os.path.dirname(os.path.abspath(__file__))
+except Exception:
+    SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# Schuetz_Langsam
-GPIO.setup(13, GPIO.OUT)
+LOG_FILE = os.path.join(SCRIPT_DIR, "schussbahn_error.log")
+logging.basicConfig(filename=LOG_FILE, level=logging.ERROR, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Schuetz_Rueckwaerts
-GPIO.setup(19, GPIO.OUT)
-
-# Schuetz_Vorearts
-GPIO.setup(26, GPIO.OUT)
-
-# Schuetz_Licht
-GPIO.setup(23, GPIO.OUT)
-
-# Festlegung der Eingaenge
-# Endschalter
-GPIO.setup(10, GPIO.IN)
-
-# Schuetz_Scnell
-GPIO.setup(12, GPIO.IN)
-
-# Schuetz_Langsam
-GPIO.setup(16, GPIO.IN)
-
-# Schuetz_Motorschutz
-GPIO.setup(18, GPIO.IN)
-
-# Schuetz_Rueckwaerts
-GPIO.setup(20, GPIO.IN)
-
-# Schuetz_Vorwaerts
-GPIO.setup(21, GPIO.IN)
-
-
-# Initalisierung des Fensters
-class Fenster(QWidget):
+class SchussbahnApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.start()
-        self.initMe()
+        self.times = load_settings()
+        self.hours_data = load_operating_hours() 
+        self.autosave_counter = 0
+        self.exit_requested = False
+        self.is_driving = False
+        self.system_fault = False 
+        self.latest_inputs = [False] * 6
+        self.latest_coils = [False] * 4
+        self.gui_error_list = load_error_log() 
 
-# Definition / Erstelung des Fensters
-    def initMe(self):
+        # Physische GPIOs auf dem Pi initialisieren
+        self.init_hardware_gpios()
+        self.init_ui()
 
-        # Definition der verwendeten Variablen
-        # Timer fuer Fahrzeiten in sek.
-        self.time_rechtslauf_schnell = 7
-        self.time_rechtslauf_langsam = 2.5
-        self.time_linkslauf_schnell = 6.5
-        self.time_Bremse = 0.2
-        self.time_Anschlag = 0.4
-        self.time_Umschaltpause = 0.05
+        self.monitor_timer = QTimer(self)
+        self.monitor_timer.timeout.connect(self.cyclic_monitor)
+        
+        self.hours_timer = QTimer(self)
+        self.hours_timer.timeout.connect(self.track_total_hours)
+        self.hours_timer.start(1000) 
 
-        # Start Merker
-        self.Start_up = 0
+        self.startup_safety_check()
 
-        # Definition der verwendeten Widgets
-        # Button fuer Rechtslauf
-        schuss = QPushButton('Schuss', self)
-        schuss.setFont(QFont('Arial', 60))
-        schuss.move(50, 20)
-        schuss.resize(400, 400)
-        schuss.clicked.connect(self.scheibe_vorwearts)
+    def init_hardware_gpios(self):
+        """Konfiguriert die GPIO-Pins des Raspberry Pi."""
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setwarnings(False)
+        
+        # Ausgänge festlegen (Auf HIGH setzen, da Relais-Karte LOW-aktiv ist)
+        for pin in PINS_OUT.values():
+            GPIO.setup(pin, GPIO.OUT)
+            GPIO.output(pin, True) # Hart ausschalten bei Start
+            
+        # Eingänge festlegen mit internem Pull-Up Widerstand
+        for pin in PINS_IN.values():
+            GPIO.setup(pin, GPIO.IN, pull_up_down=GPIO.PUD_UP)
 
-        # Button fuer Linkslauf
-        wertung = QPushButton('Wertung', self)
-        wertung.setFont(QFont('Arial', 60))
-        wertung.move(50, 470)
-        wertung.resize(400, 400)
-        wertung.clicked.connect(self.scheibe_rueckwearts)
+    def general_system_reset(self):
+        try:
+            self.is_driving = False
+            self.system_fault = False
+            self.monitor_timer.stop()
+            
+            # Alle Motorschütze hart wegschalten (True = AUS)
+            for key, pin in PINS_OUT.items():
+                if key != "Licht": GPIO.output(pin, True)
+                
+            self.times = load_settings()
+            self.exit_requested = False
+            self.startup_safety_check()
+            return True
+        except Exception as e:
+            logging.error(f"Fehler Reset: {e}")
+            return False
 
-        # Button fuer Licht an
-        licht_an = QPushButton('Licht an', self)
-        licht_an.setFont(QFont('Arial', 60))
-        licht_an.move(750, 20)
-        licht_an.resize(400, 400)
-        licht_an.clicked.connect(self.lichtan)
+    def track_total_hours(self):
+        self.hours_data["gesamt_sekunden"] += 1.0
+        self.autosave_counter += 1
+        if self.autosave_counter >= 60:
+            save_operating_hours(self.hours_data)
+            self.autosave_counter = 0
 
-        # Button fuer Licht aus
-        licht_aus = QPushButton('Licht aus', self)
-        licht_aus.setFont(QFont('Arial', 60))
-        licht_aus.move(750, 470)
-        licht_aus.resize(400, 400)
-        licht_aus.clicked.connect(self.lichtaus)
+    def add_drive_time(self, seconds):
+        self.hours_data["fahrzeit_sekunden"] += seconds
+        save_operating_hours(self.hours_data)
 
-        # Button zum anzeigen der I/O`s im Terminal
-        I_O_test = QPushButton('Test_I/O', self)
-        I_O_test.setFont(QFont('Arial', 60))
-        I_O_test.move(1465, 20)
-        I_O_test.resize(400, 400)
-        I_O_test.clicked.connect(self.test)
+    def init_ui(self):
+        self.setStyleSheet("background-color: #2b2b2b; color: #ffffff;")
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(10)
 
-        # Label zum anzeigen von Fehlern
-        error = QLabel(self)
-        error.setFont(QFont('Arial', 60))
-        error.move(310, 900)
-        error.setText(self.Stoerung())
+        grid_layout = QGridLayout()
+        grid_layout.setSpacing(10)
 
-        error_anzeige = QLabel(self, text='Status:')
-        error_anzeige.setFont(QFont('Arial', 60))
-        error_anzeige.move(50, 900)
+        self.btn_beschuss = QPushButton("Beschuss")
+        self.btn_licht_an = QPushButton("Licht an")
+        self.btn_einstellungen = QPushButton("Einstellungen")
+        self.btn_wertung = QPushButton("Wertung")
+        self.btn_licht_aus = QPushButton("Licht aus")
+        self.btn_exit = QPushButton("Exit")
 
-        # Button zum schliesen des Programms
-        exit = QPushButton('Exit', self)
-        exit.setFont(QFont('Arial', 60))
-        exit.move(1465, 470)
-        exit.resize(400, 400)
-        exit.clicked.connect(QtCore.QCoreApplication.instance().quit)
+        buttons = [
+            (self.btn_beschuss, 0, 0), (self.btn_licht_an, 0, 1), (self.btn_einstellungen, 0, 2),
+            (self.btn_wertung, 1, 0), (self.btn_licht_aus, 1, 1), (self.btn_exit, 1, 2)
+        ]
 
-        # Methode zum anzeigen des Fensters (Maximiert)
-        self.showMaximized()
+        button_font = QFont("Arial", 26, QFont.Bold)
+        for btn, row, col in buttons:
+            btn.setFont(button_font)
+            btn.setMinimumHeight(240) # Angepasst für gängige Touchscreens
+            grid_layout.addWidget(btn, row, col)
 
-# Methoden Definitionen
+        main_layout.addLayout(grid_layout, stretch=75)
 
-    # Methode fuer Linkslauf
-    def scheibe_rueckwearts(self):
+        # Positions-Balken
+        position_container = QWidget()
+        position_container.setFixedHeight(120)
+        position_container.setStyleSheet("background-color: #1a1a1a; border-radius: 8px; border: 1px solid #444444;")
+        track_layout = QHBoxLayout(position_container)
+        track_layout.setContentsMargins(20, 0, 20, 0)
+        track_layout.setSpacing(15)
 
-        # Die ueberpruefung ob der Kartenhalter hinten
-        # ist bei Spannungswiederkehr ?
-        # Wenn nicht fuehre diese Schleife aus (bis Endschalter betaetigt)
-        # Bedingung der Schleife -> Merker = 0 und Endschalter = 0
-        while self.Start_up == 0 and GPIO.input(10) == 0:
-            self.Stoerung()  # Ueberpruefung auf Fehler
-            GPIO.output(19, False)  # Einschalten der Schuetz (Linkslauf)
-            time.sleep(self.time_Bremse)
-            GPIO.output(13, False)  # Einschalten der Schuetz (Langsam)
-        else:			            # Wenn der Endschalter erreicht wurde
-            time.sleep(self.time_Anschlag)
-            GPIO.output(13, True)   # Ausschalten der Schuetz (Langsam)
-            time.sleep(self.time_Bremse)
-            GPIO.output(19, True)   # Ausschalten der Schuetz (Linkslauf)
-            self.Start_up = +1      # Setzen des Merkers auf 1
-            self.Stoerung()         # erneute Ueberpruefung auf Fehler
+        lbl_home = QLabel("Stand")
+        lbl_home.setFont(QFont("Arial", 22, QFont.Bold))
+        lbl_home.setStyleSheet("color: #00ffcc; border: none;")
 
-        # Kartenhalter war auf Startposition und ist auf Beschussposition
-        if self.Start_up == 1 and GPIO.input(10) == 0:
-            self.Stoerung()
-            GPIO.output(19, False)  # Schuetz Einschalten (Linkslauf)
-            time.sleep(self.time_Bremse)
-            GPIO.output(6, False)  # Schuetz Einschalten (Schnell)
-            time.sleep(self.time_linkslauf_schnell)
-            while GPIO.input(10) == 0:
-                GPIO.output(6, True)  # Schuetz Ausschalten (Schnell)
-                time.sleep(self.time_Umschaltpause)
-                GPIO.output(13, False)  # Einschalten Schuetz (Langsam)
-            else:
-                time.sleep(self.time_Anschlag)
-                GPIO.output(13, True)  # Ausschalten Schuetz (Langsam)
-                time.sleep(self.time_Bremse)
-                GPIO.output(19, True)  # Ausschalten Schuetz (Linkslauf)
-                self.Stoerung()
+        self.track_bar = QProgressBar()
+        self.track_bar.setRange(0, 100)
+        self.track_bar.setValue(0)
+        self.track_bar.setTextVisible(False)
+        self.track_bar.setFixedHeight(65) 
+        self.track_bar.setStyleSheet("QProgressBar { background-color: #252525; border-radius: 6px; border: 1px solid #444444; } QProgressBar::chunk { background-color: #113322; border-radius: 5px; }")
 
-    # Methode fuer Rechtslauf
-    def scheibe_vorwearts(self):
-        self.Stoerung()                     # wenn Zaehler = 0 dann ->
-        if GPIO.input(10) == 1 and self.Start_up == 0:
-            self.Start_up == +1             # Zaehler +1
-            GPIO.output(26, False)          # Schuetz Einschalten (Rechtslauf)
-            time.sleep(self.time_Bremse)
-            GPIO.output(6, False)           # Schuetz Einschalten (Schnell)
-            time.sleep(self.time_rechtslauf_schnell)
-            GPIO.output(6, True)            # Schuetz Ausschalten (Schnell)
-            GPIO.output(13, False)          # Einschalten Schuetz (Langsam)
-            time.sleep(self.time_rechtslauf_langsam)
-            GPIO.output(13, True)           # Ausschalten Schuetz (Langsam)
-            time.sleep(self.time_Bremse)
-            GPIO.output(26, True)           # Schuetz Ausschalten (Rechtslauf)
-            self.Stoerung()
+        self.moving_target = QLabel("🎯", self.track_bar)
+        self.moving_target.setFont(QFont("Arial", 32))
+        self.moving_target.setStyleSheet("border: none; background: transparent;")
+        self.moving_target.move(0, 5)
+
+        lbl_end = QLabel("Kugelfang")
+        lbl_end.setFont(QFont("Arial", 22, QFont.Bold))
+        lbl_end.setStyleSheet("color: #ffaa00; border: none;")
+
+        track_layout.addWidget(lbl_home)
+        track_layout.addWidget(self.track_bar, stretch=1)
+        track_layout.addWidget(lbl_end)
+        main_layout.addWidget(position_container, stretch=15)
+
+        # Statuszeile
+        status_layout = QHBoxLayout()
+        status_title = QLabel("Status: ")
+        status_title.setFont(QFont("Arial", 24, QFont.Bold))
+        status_title.setFixedWidth(160)
+        status_layout.addWidget(status_title)
+
+        self.status_msg = QLabel("Initialisierung...")
+        self.status_msg.setFont(QFont("Arial", 24, QFont.Bold))
+        self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 20px; border-radius: 8px;")
+        status_layout.addWidget(self.status_msg)
+        main_layout.addLayout(status_layout, stretch=10)
+
+        self.setLayout(main_layout)
+
+        self.btn_beschuss.clicked.connect(lambda: self.start_drive("Beschuss"))
+        self.btn_wertung.clicked.connect(lambda: self.start_drive("Wertung"))
+        self.btn_licht_an.clicked.connect(lambda: self.set_light(True))
+        self.btn_licht_aus.clicked.connect(lambda: self.set_light(False))
+        self.btn_einstellungen.clicked.connect(self.open_settings)
+        self.btn_exit.clicked.connect(self.handle_exit)
+        self.showFullScreen()
+
+    def startup_safety_check(self):
+        # Alle Schütze wegschalten bei Boot
+        for pin in PINS_OUT.values():
+            if pin != PINS_OUT["Licht"]: GPIO.output(pin, True)
+            
+        motorschutz = GPIO.input(PINS_IN["Motorschutz"])
+        endschalter_home = GPIO.input(PINS_IN["Endschalter"])
+        
+        self.latest_inputs = [
+            motorschutz, endschalter_home, GPIO.input(PINS_IN["Feedback_Rechts"]),
+            GPIO.input(PINS_IN["Feedback_Links"]), GPIO.input(PINS_IN["Feedback_Langsam"]), GPIO.input(PINS_IN["Feedback_Schnell"])
+        ]
+
+        if not motorschutz:
+            self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst (In1=0)!")
+            return
+
+        # Prüfen ob Schütze frei sind (LOW-aktiv Rückmeldung)
+        if any([not GPIO.input(PINS_IN["Feedback_Rechts"]), not GPIO.input(PINS_IN["Feedback_Links"]), 
+                not GPIO.input(PINS_IN["Feedback_Langsam"]), not GPIO.input(PINS_IN["Feedback_Schnell"])]):
+            self.handle_system_error("FEHLER: Schütze nicht in Nullstellung!")
+            return
+
+        if endschalter_home: # Endschalter bedient (Wagen steht am Stand)
+            self.status_msg.setText("zur Auswertung bereit")
+            self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 20px; border-radius: 8px;")
+            self.btn_beschuss.setEnabled(True)
+            self.btn_wertung.setEnabled(False)
+            self.monitor_timer.start(250)
         else:
-            GPIO.output(26, False)          # Schuetz Einschalten (Rechtslauf)
-            time.sleep(self.time_Bremse)
-            GPIO.output(6, False)           # Schuetz Einschalten (Schnell)
-            time.sleep(self.time_rechtslauf_schnell)
-            GPIO.output(6, True)            # Schuetz Ausschalten (Schnell)
-            GPIO.output(13, False)          # Einschalten Schuetz (Langsam)
-            time.sleep(self.time_rechtslauf_langsam)
-            GPIO.output(13, True)           # Ausschalten Schuetz (Langsam)
-            time.sleep(self.time_Bremse)
-            GPIO.output(26, True)           # Schuetz Ausschalten (Rechtslauf)
-            self.Stoerung()
+            self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 20px; border-radius: 8px;")
+            time.sleep(0.3) 
+            self.start_drive("HomeFahrt")
 
-    # Methode fuer Licht an
-    def lichtan(self):
-        GPIO.output(23, False)
+    def cyclic_monitor(self):
+        if self.is_driving: return
 
-    # Methode fuer Licht aus
-    def lichtaus(self):
-        GPIO.output(23, True)
+        motorschutz = GPIO.input(PINS_IN["Motorschutz"])
+        endschalter_home = GPIO.input(PINS_IN["Endschalter"])
+        
+        self.latest_inputs = [
+            motorschutz, endschalter_home, GPIO.input(PINS_IN["Feedback_Rechts"]),
+            GPIO.input(PINS_IN["Feedback_Links"]), GPIO.input(PINS_IN["Feedback_Langsam"]), GPIO.input(PINS_IN["Feedback_Schnell"])
+        ]
 
-    # Methode zur Feststellung von Fehlern
-    def Stoerung(self):
+        if self.system_fault:
+            for pin in PINS_OUT.values():
+                if pin != PINS_OUT["Licht"]: GPIO.output(pin, True)
+            return
 
-        # Bedingung -> Eingang Motorschutz =0
-        if GPIO.input(18) == 0:
-            self.stop()
-            fehler = 'Motorschutz ausgeloest'
-            return fehler
+        if not motorschutz: 
+            self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
+            return
 
-        # Bedingung -> Endschalter =1 und einer
-        # der 4 Schuetze ist noch an -> Schuetz klebt
-        elif (GPIO.input(18) == 1
-              and GPIO.input(20) == 1
-              or GPIO.input(21) == 1
-              or GPIO.input(16) == 1
-              or GPIO.input(12) == 1):
-            self.stop()
-            fehler = 'Ein Schuetz klebt'
-            return fehler
-
-        # Bedingung -> Mototrschutz und Endschalter =1
-        elif GPIO.input(18) == 1 and GPIO.input(10) == 1:
-            fehler = 'Auswertung'
-            return fehler
-
-        # Bedingung -> Endschalter und Schuetze =0 und Motorschutz =1S
-        elif (GPIO.input(10) == 0
-              and GPIO.input(20) == 0
-              and GPIO.input(21) == 0
-              and GPIO.input(16) == 0
-              and GPIO.input(12) == 0
-              and GPIO.input(18) == 1):
-            fehler = 'Feuer frei'
-            return fehler
-
-        # Bedingung -> treffen die Bedingungen
-        # von weiter oben nicht zu => Fehlerfrei
+        if endschalter_home:
+            self.status_msg.setText("zur Auswertung bereit")
+            self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 8px; border-radius: 8px;")
+            self.btn_beschuss.setEnabled(True)
+            self.btn_wertung.setEnabled(False)
         else:
-            fehler = 'OK'
-            return fehler
+            self.status_msg.setText("Bahn frei? / Beschuss bereit")
+            self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 8px; border-radius: 8px;")
+            self.btn_beschuss.setEnabled(False)
+            self.btn_wertung.setEnabled(True)
 
-    # Im Fehlerfall alle Motorschuetze abschalten
-    def stop(self):
-        GPIO.output(13, True),  # Schnell
-        GPIO.output(6, True),  # Langsam
-        time.sleep(self.time_Bremse)
-        GPIO.output(19, True),  # Linkslauf
-        GPIO.output(26, True)  # Rechtslauf
-        self.Start_up = 0
+    def start_drive(self, mode):
+        self.is_driving = True
+        self.monitor_timer.stop()
+        self.btn_beschuss.setEnabled(False)
+        self.btn_wertung.setEnabled(False)
+        self.thread = DriveThread(mode, self, self.times)
+        self.thread.status_signal.connect(self.update_status)
+        self.thread.error_signal.connect(self.handle_system_error)
+        self.thread.finished_signal.connect(self.drive_finished)
+        self.thread.drive_time_signal.connect(self.add_drive_time)
+        self.thread.start()
+        self.start_position_animation(mode)
 
-    # Bei Start alles Abschalten um ungewollte Bewegungen zu verhindern
-    def start(self):
-        GPIO.output(13, True),  # Schnell
-        GPIO.output(6, True),  # Langsam
-        GPIO.output(19, True),  # Linkslauf
-        GPIO.output(26, True)  # Rechtslauf
-        GPIO.output(23, True)  # Licht
+    def update_status(self, text):
+        self.status_msg.setText(text)
+        if text == "Unterwegs":
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 8px; border-radius: 8px;")
 
-    # Ausgabe aller Parameter zur ueberpruefung im Terminal
-    def test(self):
-        print(' ')
-        print('#_Ausgaenge')
-        print(str(GPIO.input(6)) + ' _Schnell')
-        print(str(GPIO.input(13)) + ' _Langsam')
-        print(str(GPIO.input(19)) + ' _Linkslauf')
-        print(str(GPIO.input(26)) + ' _Rechtslauf')
-        print(str(GPIO.input(23)) + ' _Licht')
-        print(' ')
-        print('#_Eingaenge')
-        print(str(GPIO.input(10)) + ' _Endschalter')
-        print(str(GPIO.input(12)) + ' _Schnell')
-        print(str(GPIO.input(16)) + ' _Langsam')
-        print(str(GPIO.input(18)) + ' _Motorschutz')
-        print(str(GPIO.input(20)) + ' _Linkslauf')
-        print(str(GPIO.input(21)) + ' _Rechtslauf')
-        print(str(self.Start_up) + ' _Startmerker')
+    def drive_finished(self):
+        self.stop_position_animation()
+        self.is_driving = False
+        if self.exit_requested: 
+            self.close_program_safely()
+        else: 
+            self.monitor_timer.start(250)
 
+    def handle_system_error(self, message):
+        self.stop_position_animation()
+        self.is_driving = False
+        self.system_fault = True
+        timestamp = time.strftime("%d.%m.%Y %H:%M:%S")
+        clean_msg = message.replace("FEHLER: ", "")
+        self.gui_error_list.insert(0, f"({timestamp}) {clean_msg}")
+        if len(self.gui_error_list) > 5: 
+            self.gui_error_list.pop()
+        save_error_log(self.gui_error_list)
+        
+        for pin in PINS_OUT.values():
+            if pin != PINS_OUT["Licht"]: 
+                GPIO.output(pin, True)
+                
+        self.status_msg.setText(message)
+        self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 8px; border: 2px solid red; border-radius: 8px;")
+        self.btn_beschuss.setEnabled(False)
+        self.btn_wertung.setEnabled(False)
+        if not self.monitor_timer.isActive(): 
+            self.monitor_timer.start(250)
 
-# Abschluss des Programmes / Fensters
-app = QApplication(sys.argv)
-F = Fenster()
-sys.exit(app.exec_())
+    def set_light(self, state):
+        self.btn_licht_an.setEnabled(False)
+        self.btn_licht_aus.setEnabled(False)
+        # Relaiskarte schaltet das Licht bei False (LOW) EIN!
+        GPIO.output(PINS_OUT["Licht"], not state)
+        QTimer.singleShot(500, lambda: self.btn_licht_an.setEnabled(True))
+        QTimer.singleShot(500, lambda: self.btn_licht_aus.setEnabled(True))
+
+    def open_settings(self):
+        if not hasattr(self, 'settings_window') or self.settings_window is None:
+            self.settings_window = SettingsWindow(self)
+        self.settings_window.show()
+        self.settings_window.raise_()
+        self.settings_window.activateWindow()
+
+    def handle_exit(self):
+        if self.is_driving:
+            self.exit_requested = True
+            self.status_msg.setText("Exit angefordert. Letzte Fahrt wird beendet...")
+        else:
+            self.close_program_safely()
+
+    def close_program_safely(self):
+        self.monitor_timer.stop()
+        self.hours_timer.stop()
+        save_operating_hours(self.hours_data)
+        if hasattr(self, 'settings_window') and self.settings_window is not None:
+            self.settings_window.close()
+        for pin in PINS_OUT.values(): 
+            GPIO.output(pin, True) # Alles aus
+        GPIO.cleanup()
+        sys.exit(0)
+
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key_Escape or event.key() == Qt.Key_Q: 
+            self.handle_exit()
+
+    def start_tipp_mode(self, direction):
+        if self.system_fault or self.is_driving: 
+            return
+        self.is_driving = True
+        self.monitor_timer.stop()
+        self.thread = DriveThread(direction, self, self.times)
+        self.thread.drive_time_signal.connect(self.add_drive_time)
+        self.thread.start()
+
+    def stop_tipp_mode(self):
+        if not self.is_driving: 
+            return
+        self.stop_position_animation()
+        try:
+            if hasattr(self, 'thread') and self.thread.isRunning():
+                self.thread.terminate()
+                self.thread.wait()
+            for pin in PINS_OUT.values():
+                if pin != PINS_OUT["Licht"]: 
+                    GPIO.output(pin, True)
+        except: 
+            pass
+        self.is_driving = False
+        self.monitor_timer.start(250)
+
+    def clear_gui_error_log(self):
+        self.gui_error_list = []
+        save_error_log(self.gui_error_list)
+
+    def start_position_animation(self, mode):
+        self.anim_mode = mode
+        self.anim_start_time = time.time()
+        self.t_beschuss_schnell = self.times.get("Beschuss Schnell", 3.0)
+        self.t_beschuss_langsam = self.times.get("Beschuss Langsam", 2.0)
+        self.t_wertung_schnell = self.times.get("Wertung Schnell", 2.5)
+        self.animation_timer = QTimer(self)
+        self.animation_timer.timeout.connect(self.process_target_movement)
+        self.animation_timer.start(30)
+
+    def process_target_movement(self):
+        elapsed = time.time() - self.anim_start_time
+        progress_percent = 0
+        if self.anim_mode == "Beschuss":
+            total_time = self.t_beschuss_schnell + self.t_beschuss_langsam
+            progress_percent = 100 if elapsed >= total_time else int((elapsed / total_time) * 100)
+        elif self.anim_mode in ("Wertung", "HomeFahrt"):
+            estimated_total = self.t_wertung_schnell + 3.0
+            progress_percent = 0 if elapsed >= estimated_total else int(100 - ((elapsed / estimated_total) * 100))
+            if progress_percent < 0: 
+                progress_percent = 0
+        elif self.anim_mode == "TippVor":
+            progress_percent = min(self.track_bar.value() + 1, 100)
+        elif self.anim_mode == "TippRueck":
+            progress_percent = max(self.track_bar.value() - 1, 0)
+            
+        self.track_bar.setValue(progress_percent)
+        available_width = max(self.track_bar.width() - 42, 800)
+        target_x = int((progress_percent / 100.0) * available_width)
+        self.moving_target.move(target_x, 5)
+
+    def stop_position_animation(self):
+        if hasattr(self, 'animation_timer') and self.animation_timer.isActive():
+            self.animation_timer.stop()
+        if GPIO.input(PINS_IN["Endschalter"]):
+            self.track_bar.setValue(0)
+            self.moving_target.move(0, 5)
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    window = SchussbahnApp()
+    window.show()
+    sys.exit(app.exec_())
