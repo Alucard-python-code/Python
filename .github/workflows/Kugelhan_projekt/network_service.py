@@ -1,4 +1,3 @@
-#v1.2
 import socket
 import time
 import _thread
@@ -10,7 +9,7 @@ import motor
 # 1. MODBUS TCP PROTOKOLL ENGINE
 # =========================================================================
 def handle_modbus_client(client_sock):
-    """Verarbeitet eingehende Modbus-TCP Binärtelegramme (FC03 & FC06)."""
+    """Verarbeitet eingehende Modbus-TCP Binärtelegramme mit Fehler-Exceptions (Punkt 2)."""
     global state
     try:
         client_sock.settimeout(2.0)
@@ -29,13 +28,23 @@ def handle_modbus_client(client_sock):
             # MBAP Header & PDU extrahieren
             tx_id = data[0:2]
             proto_id = data[2:4]
-            unit_id = data[6]
-            func_code = data[7]
-            reg_addr = (data[8] << 8) | data[9]
+            unit_id = data
+            func_code = data
+            reg_addr = (data << 8) | data
             
+            # --- PUNKT 2: INDUSTRIELLE FEHLERBEHANDLUNG ---
+            # Wenn ein kritischer Hardwarefehler vorliegt, antwortet der RP2040 aktiv mit
+            # einem offiziellen Modbus Exception Code 04 (Server/Slave Device Failure)
+            if state["fehler_code"] != 0:
+                pdu = bytearray([func_code + 0x80, 0x04]) # 0x04 = Slave Device Failure
+                header = bytearray([tx_id, tx_id, proto_id, proto_id, 0x00, len(pdu) + 1, unit_id])
+                client_sock.sendall(header + pdu)
+                continue # Springe zum naechsten Paket, ueberspringe normale Verarbeitung
+            
+            # --- NORMALE VERARBEITUNG (Wenn kein Fehler vorliegt) ---
             # --- FUNCTION CODE 03: Read Holding Registers ---
             if func_code == 3:
-                num_regs = (data[10] << 8) | data[11]
+                num_regs = (data << 8) | data
                 byte_count = num_regs * 2
                 pdu = bytearray([3, byte_count])
                 
@@ -44,7 +53,7 @@ def handle_modbus_client(client_sock):
                     val = 0
                     if curr == 0: val = state["soll_oeffnung"]
                     elif curr == 1: val = state["ist_oeffnung"]
-                    elif curr == 2: val = int(state["temperatur"] * 10) # z.B. 24.5°C -> 245
+                    elif curr == 2: val = int(state["temperatur"] * 10)
                     elif curr == 3: val = state["status_code"]
                     elif curr == 4: val = state["fehler_code"]
                     
@@ -53,16 +62,14 @@ def handle_modbus_client(client_sock):
                     
             # --- FUNCTION CODE 06: Write Single Register ---
             elif func_code == 6:
-                val = (data[10] << 8) | data[11]
+                val = (data << 8) | data
                 if reg_addr == 0 and 0 <= val <= 100: 
                     state["soll_oeffnung"] = val
-                # Echo als Antwort zurücksenden (Standard bei FC06)
-                pdu = data[7:12]
+                pdu = data[7:12] # Echo zurücksenden
             else:
-                # Illegaler Funktionscode (Exception)
-                pdu = bytearray([func_code + 0x80, 0x01])
+                pdu = bytearray([func_code + 0x80, 0x01]) # Illegal Function
                 
-            header = bytearray([tx_id[0], tx_id[1], proto_id[0], proto_id[1], 0x00, len(pdu) + 1, unit_id])
+            header = bytearray([tx_id, tx_id, proto_id, proto_id, 0x00, len(pdu) + 1, unit_id])
             client_sock.sendall(header + pdu)
     except: 
         pass
@@ -70,7 +77,6 @@ def handle_modbus_client(client_sock):
         client_sock.close()
 
 def modbus_server_loop():
-    """Lauscht permanent auf Verbindungen am konfigurierten Modbus-Port."""
     s = socket.socket()
     s.bind(('0.0.0.0', settings["modbus_port"]))
     s.listen(2)
@@ -83,7 +89,6 @@ def modbus_server_loop():
             time.sleep_ms(100)
 
 def watchdog_check_loop():
-    """Prüft im Hintergrund, ob die Modbus-Verbindung unterbrochen wurde."""
     while True:
         diff = time.ticks_diff(time.ticks_ms(), state["last_modbus_activity"])
         if diff > settings["watchdog_timeout_ms"] and not state["watchdog_triggered"]:
@@ -96,7 +101,6 @@ def watchdog_check_loop():
 # 2. WEBINTERFACE HTML & LOGIC SERVER
 # =========================================================================
 def get_login_html(error_msg=""):
-    """Erzeugt die Login-Maske, falls der Nutzer nicht angemeldet ist."""
     err_line = f"<p style='color:red; font-weight:bold;'>{error_msg}</p>" if error_msg else ""
     return f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>PR2020 Login</title>
     <style>
@@ -116,7 +120,6 @@ def get_login_html(error_msg=""):
     </div></body></html>"""
 
 def get_html():
-    """Erzeugt das geschützte Haupt-Webinterface (nur sichtbar nach Login)."""
     msg, style = "Alles i.O.", "color: green; font-weight: bold;"
     if state["fehler_code"] == 1: msg, style = "FEHLER: Poti defekt!", "color: red; font-weight: bold;"
     elif state["fehler_code"] == 2: msg, style = "FEHLER: Watchdog Timeout!", "color: red; font-weight: bold;"
@@ -136,7 +139,8 @@ def get_html():
         <div style="float:right;"><a class="btn btn-stop" href="/logout">Abmelden</a></div>
         <h2>1 1/2" Ventilsteuerung Live-Daten</h2>
         <div class="box">
-            <p>Zustand: <span style='{style}'>{msg}</span> ({st_txt})</p>
+            <p>Zustand: <span style='{style}'>{msg}</span></p>
+            <p>Motor-Zustand: <b>{st_txt}</b></p>
             <p>Soll-Vorgabe: <b>{state['soll_oeffnung']}%</b> | Position: <b>{state['ist_oeffnung']}%</b></p>
             <p>Poti Live-Rohwert: <b>{state['poti_raw_live']}</b> (Bereich: {state['poti_min']} bis {state['poti_max']})</p>
             <p>Temperatur: <b>{state['temperatur']}&deg;C</b></p>
@@ -168,7 +172,6 @@ def get_html():
     </body></html>"""
 
 def web_server_loop():
-    """Verarbeitet alle HTTP-Anfragen, prüft Logins und steuert Kalibrierung/Settings."""
     s = socket.socket()
     s.bind(('0.0.0.0', settings["web_port"]))
     s.listen(2)
@@ -177,15 +180,14 @@ def web_server_loop():
     while True:
         try:
             c, a = s.accept()
-            client_ip = a[0]
+            client_ip = a
             req = c.recv(1024).decode('utf-8')
             
             current_password = load_password()
             
-            # --- 1. LOGIN VERARBEITEN ---
             if "GET /login" in req:
                 try:
-                    submitted_pwd = req.split("pwd=")[1].split(" ")[0]
+                    submitted_pwd = req.split("pwd=").split(" ")
                     if submitted_pwd == current_password:
                         if client_ip not in state["logged_in_users"]:
                             state["logged_in_users"].append(client_ip)
@@ -197,10 +199,8 @@ def web_server_loop():
                         c.sendall(get_login_html("Falsches Passwort!").encode('utf-8'))
                         c.close()
                         continue
-                except:
-                    pass
+                except: pass
 
-            # --- 2. LOGOUT VERARBEITEN ---
             if "GET /logout" in req:
                 if client_ip in state["logged_in_users"]:
                     state["logged_in_users"].remove(client_ip)
@@ -210,7 +210,6 @@ def web_server_loop():
 
             # --- 3. AUTHENTIFIZIERUNGSPRUEFUNG ---
             is_authenticated = (client_ip in state["logged_in_users"]) or ("Cookie: auth=1" in req)
-            
             if not is_authenticated:
                 c.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n".encode('utf-8'))
                 c.sendall(get_login_html().encode('utf-8'))
@@ -221,12 +220,13 @@ def web_server_loop():
             if "GET /motor" in req:
                 if "cmd=open" in req:
                     motor.stop_motor()
-                    motor.m_open.value(1)
+                    # Bei Handsteuerung wird der Motor ebenfalls sanft angefahren
                     state["status_code"] = 1
+                    _thread.start_new_thread(motor.drive_motor_soft, (motor.m_open_pwm,))
                 elif "cmd=close" in req:
                     motor.stop_motor()
-                    motor.m_close.value(1)
                     state["status_code"] = 2
+                    _thread.start_new_thread(motor.drive_motor_soft, (motor.m_close_pwm,))
                 elif "cmd=stop" in req:
                     motor.stop_motor()
                     state["status_code"] = 0
@@ -248,24 +248,20 @@ def web_server_loop():
                         if k == "ip" and v != settings["ip"]: 
                             settings["ip"] = v
                             reboot_needed = True
-                        elif k == "wdt": 
-                            settings["watchdog_timeout_ms"] = int(v)
-                        elif k == "blk": 
-                            settings["motor_block_ms"] = int(v)
-                        elif k == "new_pwd" and v != "": 
-                            save_password(v)
+                        elif k == "wdt": settings["watchdog_timeout_ms"] = int(v)
+                        elif k == "blk": settings["motor_block_ms"] = int(v)
+                        elif k == "new_pwd" and v != "": save_password(v)
                     
                     if reboot_needed:
                         c.send("HTTP/1.1 200 OK\r\n\r\nIP geandert. Controller startet neu...".encode('utf-8'))
                         c.close()
                         time.sleep(1)
                         machine.reset()
-                except: 
-                    pass
+                except: pass
                 
-            # Seite ausliefern
             c.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n".encode('utf-8'))
             c.sendall(get_html().encode('utf-8'))
             c.close()
         except: 
             time.sleep_ms(100)
+
