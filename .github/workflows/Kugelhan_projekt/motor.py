@@ -1,6 +1,6 @@
 import machine
 import time
-from config import PIN_MOTOR_OPEN, PIN_MOTOR_CLOSE, PIN_LED_GREEN, PIN_LED_YELLOW, PIN_LED_RED, state
+from config import PIN_MOTOR_OPEN, PIN_MOTOR_CLOSE, PIN_LED_GREEN, PIN_LED_YELLOW, PIN_LED_RED, state, settings
 from sensors import read_position_percent
 
 # Pins konfigurieren
@@ -41,9 +41,11 @@ def motor_control_loop():
             time.sleep_ms(100)
             continue
             
-        if state["ist_oeffnung"] != prev_ist:
-            last_pos_change = time.ticks_ms()
-            prev_ist = state["ist_oeffnung"]
+        if state["status_code"] != 0 and time.ticks_diff(time.ticks_ms(), last_pos_change) > settings["motor_block_ms"]:
+            state["fehler_code"] = 3 # Blockiert
+            stop_motor()
+            state["status_code"] = 0
+            continue
             
         if state["status_code"] != 0 and time.ticks_diff(time.ticks_ms(), last_pos_change) > 3000:
             state["fehler_code"] = 3 # Blockiert

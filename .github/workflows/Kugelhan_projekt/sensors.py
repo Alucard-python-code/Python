@@ -9,15 +9,25 @@ spi = machine.SPI(0, baudrate=1000000, polarity=1, phase=1,
                   sck=machine.Pin(PIN_MAX_SCK), mosi=machine.Pin(PIN_MAX_MOSI), miso=machine.Pin(PIN_MAX_MISO))
 
 def read_position_percent():
-    total = 0
-    for _ in range(10):
-        total += poti_adc.read_u16()
-        time.sleep_us(100)
-    raw_val = total // 10
+    """Liest das Poti aus und filtert EMV-Spitzen per Median-Filter (Punkt 3)."""
+    global state
+    
+    # 5 aufeinanderfolgende Messungen durchführen
+    raw_values = []
+    for _ in range(5):
+        raw_values.append(poti_adc.read_u16())
+        time.sleep_us(200)
+    
+    # Werte der Größe nach sortieren
+    raw_values.sort()
+    
+    # Den mathematischen Mittelwert (Index 2 von 0,1,2,3,4) als stabilsten Wert nehmen
+    raw_val = raw_values[2]
     
     # Live-Rohwert für das Webinterface bereitstellen
     state["poti_raw_live"] = raw_val
     
+    # Fehlerprüfung (Kabelbruch / Kurzschluss)
     if raw_val < 500 or raw_val > 65000:
         state["fehler_code"] = 1
         return -1
@@ -31,6 +41,7 @@ def read_position_percent():
     if percent < 0: percent = 0
     if percent > 100: percent = 100
     return percent
+
 
 def read_pt1000_temperature():
     RREF = 4300.0  

@@ -27,7 +27,8 @@ settings = {
     "dns": "192.168.1.1",
     "modbus_port": 502,
     "web_port": 80,
-    "watchdog_timeout_ms": 60000  # 60 Sekunden Standard-Timeout
+    "watchdog_timeout_ms": 60000,
+    "motor_block_ms": 1500
 }
 
 # =========================================================================
