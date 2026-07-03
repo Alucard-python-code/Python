@@ -9,7 +9,7 @@ import motor
 # 1. MODBUS TCP PROTOKOLL ENGINE
 # =========================================================================
 def handle_modbus_client(client_sock):
-    """Verarbeitet eingehende Modbus-TCP Binärtelegramme mit Fehler-Exceptions (Punkt 2)."""
+    """Verarbeitet eingehende Modbus-TCP Binärtelegramme mit Fehler-Exceptions."""
     global state
     try:
         client_sock.settimeout(2.0)
@@ -28,23 +28,23 @@ def handle_modbus_client(client_sock):
             # MBAP Header & PDU extrahieren
             tx_id = data[0:2]
             proto_id = data[2:4]
-            unit_id = data
-            func_code = data
-            reg_addr = (data << 8) | data
+            unit_id = data[6]
+            func_code = data[7]
+            reg_addr = (data[8] << 8) | data[9]
             
-            # --- PUNKT 2: INDUSTRIELLE FEHLERBEHANDLUNG ---
+            # --- INDUSTRIELLE FEHLERBEHANDLUNG ---
             # Wenn ein kritischer Hardwarefehler vorliegt, antwortet der RP2040 aktiv mit
             # einem offiziellen Modbus Exception Code 04 (Server/Slave Device Failure)
             if state["fehler_code"] != 0:
                 pdu = bytearray([func_code + 0x80, 0x04]) # 0x04 = Slave Device Failure
-                header = bytearray([tx_id, tx_id, proto_id, proto_id, 0x00, len(pdu) + 1, unit_id])
+                header = bytearray([tx_id[0], tx_id[1], proto_id[0], proto_id[1], 0x00, len(pdu) + 1, unit_id])
                 client_sock.sendall(header + pdu)
                 continue # Springe zum naechsten Paket, ueberspringe normale Verarbeitung
             
             # --- NORMALE VERARBEITUNG (Wenn kein Fehler vorliegt) ---
             # --- FUNCTION CODE 03: Read Holding Registers ---
             if func_code == 3:
-                num_regs = (data << 8) | data
+                num_regs = (data[10] << 8) | data[11]
                 byte_count = num_regs * 2
                 pdu = bytearray([3, byte_count])
                 
@@ -53,7 +53,7 @@ def handle_modbus_client(client_sock):
                     val = 0
                     if curr == 0: val = state["soll_oeffnung"]
                     elif curr == 1: val = state["ist_oeffnung"]
-                    elif curr == 2: val = int(state["temperatur"] * 10)
+                    elif curr == 2: val = int(state["temperatur"] * 10) # z.B. 24.5°C -> 245
                     elif curr == 3: val = state["status_code"]
                     elif curr == 4: val = state["fehler_code"]
                     
@@ -62,14 +62,14 @@ def handle_modbus_client(client_sock):
                     
             # --- FUNCTION CODE 06: Write Single Register ---
             elif func_code == 6:
-                val = (data << 8) | data
+                val = (data[10] << 8) | data[11]
                 if reg_addr == 0 and 0 <= val <= 100: 
                     state["soll_oeffnung"] = val
                 pdu = data[7:12] # Echo zurücksenden
             else:
                 pdu = bytearray([func_code + 0x80, 0x01]) # Illegal Function
                 
-            header = bytearray([tx_id, tx_id, proto_id, proto_id, 0x00, len(pdu) + 1, unit_id])
+            header = bytearray([tx_id[0], tx_id[1], proto_id[0], proto_id[1], 0x00, len(pdu) + 1, unit_id])
             client_sock.sendall(header + pdu)
     except: 
         pass
@@ -77,6 +77,7 @@ def handle_modbus_client(client_sock):
         client_sock.close()
 
 def modbus_server_loop():
+    """Lauscht permanent auf Verbindungen am konfigurierten Modbus-Port."""
     s = socket.socket()
     s.bind(('0.0.0.0', settings["modbus_port"]))
     s.listen(2)
@@ -89,6 +90,7 @@ def modbus_server_loop():
             time.sleep_ms(100)
 
 def watchdog_check_loop():
+    """Prüft im Hintergrund, ob die Modbus-Verbindung unterbrochen wurde (Puffer-Logik)."""
     while True:
         diff = time.ticks_diff(time.ticks_ms(), state["last_modbus_activity"])
         if diff > settings["watchdog_timeout_ms"] and not state["watchdog_triggered"]:
@@ -96,11 +98,11 @@ def watchdog_check_loop():
             state["fehler_code"] = 2
             print("[Watchdog] Timeout ausgeloest! Keine Modbus-Aktivitaet.")
         time.sleep_ms(500)
-
 # =========================================================================
-# 2. WEBINTERFACE HTML & LOGIC SERVER
+# 2. WEBINTERFACE HTML GENERIERUNG
 # =========================================================================
 def get_login_html(error_msg=""):
+    """Erzeugt die Login-Maske, falls der Nutzer nicht angemeldet ist."""
     err_line = f"<p style='color:red; font-weight:bold;'>{error_msg}</p>" if error_msg else ""
     return f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>PR2020 Login</title>
     <style>
@@ -120,12 +122,16 @@ def get_login_html(error_msg=""):
     </div></body></html>"""
 
 def get_html():
+    """Erzeugt das geschützte Haupt-Webinterface (nur sichtbar nach Login)."""
     msg, style = "Alles i.O.", "color: green; font-weight: bold;"
     if state["fehler_code"] == 1: msg, style = "FEHLER: Poti defekt!", "color: red; font-weight: bold;"
     elif state["fehler_code"] == 2: msg, style = "FEHLER: Watchdog Timeout!", "color: red; font-weight: bold;"
     elif state["fehler_code"] == 3: msg, style = "FEHLER: Motor blockiert!", "color: red; font-weight: bold;"
     
     st_txt = ["Bereit", "Oeffnet...", "Schliesst..."][state["status_code"]]
+    calib_status = "Inaktiv"
+    if state["auto_calib_active"]:
+        calib_status = f"Aktiv - Schritt {state['auto_calib_step']} laeuft..."
     
     return f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>PR2020 Control</title>
     <style>
@@ -146,17 +152,18 @@ def get_html():
             <p>Temperatur: <b>{state['temperatur']}&deg;C</b></p>
         </div>
 
-        <h2>Automatisches Poti-Kalibrierwerkzeug</h2>
+        <h2>Vollautomatische Endschalter-Kalibrierung</h2>
         <div class="box">
-            <p><i>Schritt 1: Ventil manuell an die Anschlaege fahren.</i></p>
+            <p><b>Status der Auto-Kalibrierung:</b> <span style="color:orange; font-weight:bold;">{calib_status}</span></p>
+            <p><i>Klicken Sie auf den Button, um den Kugelhahn vollautomatisch beide Endanschlaege anfahren zu lassen. Das System speichert die Werte danach von allein.</i></p>
+            <a class="btn btn-save" style="background:#17a2b8;" href="/autocalib">Vollautomatische Kalibrierung JETZT starten</a>
+        </div>
+
+        <h2>Manueller Motortest (Fehlersuche)</h2>
+        <div class="box">
             <a class="btn" href="/motor?cmd=open">Motor RECHTS (Auf)</a>
             <a class="btn" href="/motor?cmd=close">Motor LINKS (Zu)</a>
             <a class="btn btn-stop" href="/motor?cmd=stop">MOTOR STOPP</a>
-            <hr>
-            <p><i>Schritt 2: Endpunkte im laufenden Betrieb setzen.</i></p>
-            <a class="btn" href="/calib?set=min">Aktuellen Wert als ZU (0%) setzen</a> <small>(Gespeichert: {state['poti_min']})</small><br><br>
-            <a class="btn" href="/calib?set=max">Aktuellen Wert als AUF (100%) setzen</a> <small>(Gespeichert: {state['poti_max']})</small><br><br>
-            <a class="btn btn-save" href="/calib?set=save">Kalibrierung permanent speichern</a>
         </div>
 
         <h2>System-Konfiguration & Passwort aendern</h2>
@@ -170,8 +177,11 @@ def get_html():
             </form>
         </div>
     </body></html>"""
-
+# =========================================================================
+# 3. WEBSERVER REQUEST ROUTING LOOP
+# =========================================================================
 def web_server_loop():
+    """Lauscht auf Port 80, validiert Logins und steuert Handlauf/Settings/Auto-Calib."""
     s = socket.socket()
     s.bind(('0.0.0.0', settings["web_port"]))
     s.listen(2)
@@ -180,14 +190,15 @@ def web_server_loop():
     while True:
         try:
             c, a = s.accept()
-            client_ip = a
+            client_ip = a[0]
             req = c.recv(1024).decode('utf-8')
             
             current_password = load_password()
             
+            # --- LOGIN VERARBEITEN ---
             if "GET /login" in req:
                 try:
-                    submitted_pwd = req.split("pwd=").split(" ")
+                    submitted_pwd = req.split("pwd=")[1].split(" ")[0]
                     if submitted_pwd == current_password:
                         if client_ip not in state["logged_in_users"]:
                             state["logged_in_users"].append(client_ip)
@@ -201,6 +212,7 @@ def web_server_loop():
                         continue
                 except: pass
 
+            # --- LOGOUT VERARBEITEN ---
             if "GET /logout" in req:
                 if client_ip in state["logged_in_users"]:
                     state["logged_in_users"].remove(client_ip)
@@ -208,7 +220,7 @@ def web_server_loop():
                 c.close()
                 continue
 
-            # --- 3. AUTHENTIFIZIERUNGSPRUEFUNG ---
+            # --- AUTHENTIFIZIERUNGSPRUEFUNG ---
             is_authenticated = (client_ip in state["logged_in_users"]) or ("Cookie: auth=1" in req)
             if not is_authenticated:
                 c.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n".encode('utf-8'))
@@ -216,11 +228,18 @@ def web_server_loop():
                 c.close()
                 continue
 
-            # --- 4. MOTOR-HANDSTEUERUNG (NUR EINGELOGGT) ---
-            if "GET /motor" in req:
+            # --- AB HIER NUR EINGELOGGTE NUTZER ---
+            
+            # --- AUTO-KALIBRIERUNG TRIGGERN ---
+            if "GET /autocalib" in req:
+                state["auto_calib_active"] = True
+                state["auto_calib_step"] = 1 # Startet mit der Fahrt zu ZU
+                print("[Web] Vollautomatische Kalibrierung gestartet.")
+
+            # --- MANUELLER MOTOR-HANDLAUF ---
+            elif "GET /motor" in req:
                 if "cmd=open" in req:
                     motor.stop_motor()
-                    # Bei Handsteuerung wird der Motor ebenfalls sanft angefahren
                     state["status_code"] = 1
                     _thread.start_new_thread(motor.drive_motor_soft, (motor.m_open_pwm,))
                 elif "cmd=close" in req:
@@ -232,16 +251,12 @@ def web_server_loop():
                     state["status_code"] = 0
                     state["soll_oeffnung"] = state["ist_oeffnung"]
             
-            # --- 5. KALIBRIERUNG (NUR EINGELOGGT) ---
-            elif "GET /calib" in req:
-                if "set=min" in req: state["poti_min"] = state["poti_raw_live"]
-                elif "set=max" in req: state["poti_max"] = state["poti_raw_live"]
-                elif "set=save" in req: save_calibration()
-            
-            # --- 6. SPEICHERN & ENGINES (NUR EINGELOGGT) ---
+            # --- CONFIG SPEICHERN ---
             elif "GET /save" in req:
                 try:
-                    params = req.split(" ").split("?").split("&")
+                    # Parameter-String isolieren und in Paare splitten
+                    query_string = req.split(" ")[1].split("?")[1]
+                    params = query_string.split("&")
                     reboot_needed = False
                     for p in params:
                         k, v = p.split("=")
@@ -259,9 +274,9 @@ def web_server_loop():
                         machine.reset()
                 except: pass
                 
+            # Standard: Seite ausliefern
             c.send("HTTP/1.1 200 OK\r\nContent-Type: text/html\r\n\r\n".encode('utf-8'))
             c.sendall(get_html().encode('utf-8'))
             c.close()
         except: 
             time.sleep_ms(100)
-
