@@ -1,3 +1,4 @@
+# config.py - v1.2.2
 import machine
 import json
 
@@ -11,14 +12,19 @@ PIN_LED_GREEN = 4
 PIN_LED_YELLOW = 5     
 PIN_LED_RED = 6        
 
-# NEU: Pins für die mechanischen Endschalter (NC gegen GND)
+# Pins für die mechanischen Endschalter (NC gegen GND)
 PIN_LIMIT_CLOSE = 7    # Endschalter ZU
 PIN_LIMIT_OPEN = 8     # Endschalter AUF
 
+# SPI-Pins für den PT1000 Wandler (MAX31865)
 PIN_MAX_CS = 10
 PIN_MAX_SCK = 13
 PIN_MAX_MOSI = 11
 PIN_MAX_MISO = 12
+
+# Feste Hardware-Verdrahtung des W5500-EVB-Pico-PoE Boards
+PIN_W5500_CS = 17      # Interner Ethernet Chip-Select
+PIN_W5500_RST = 20     # Interner Ethernet Reset
 
 # =========================================================================
 # 2. SYSTEM-EINSTELLUNGEN
@@ -50,7 +56,7 @@ state = {
     "watchdog_triggered": False, 
     "logged_in_users": [],       
     
-    # NEU: Zustände für die vollautomatische Kalibrierung
+    # Zustände für die vollautomatische Kalibrierung
     "auto_calib_active": False,
     "auto_calib_step": 0        # 0=Inaktiv, 1=Fahre zu ZU, 2=Fahre zu AUF
 }
