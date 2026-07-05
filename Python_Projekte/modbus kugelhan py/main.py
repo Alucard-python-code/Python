@@ -1,6 +1,6 @@
 # main.py - v1.2.2
 import machine
-import network
+import network_services
 import time
 import _thread
 from config import settings, state, load_calibration, PIN_W5500_CS, PIN_W5500_RST
