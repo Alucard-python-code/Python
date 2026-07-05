@@ -562,3 +562,4 @@ if __name__ == "__main__":
     window = SchussbahnApp()
     window.show()
     sys.exit(app.exec_())
+
