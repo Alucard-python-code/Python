@@ -6,7 +6,6 @@ import _thread
 from config import settings, state, load_calibration, PIN_W5500_CS, PIN_W5500_RST
 import motor
 import network_services
-import sensors
 
 def init_ethernet():
     """Initialisiert den W5500-Ethernet-Controller des Pico-PoE Boards über SPI."""
