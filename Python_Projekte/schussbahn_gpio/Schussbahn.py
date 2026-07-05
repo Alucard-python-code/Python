@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import sys
 import os
+# os.environ["GPIOZERO_PIN_FACTORY"] = "mock" # Pin test ohne Hardware
 import logging
 import time
 from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QGridLayout, 
