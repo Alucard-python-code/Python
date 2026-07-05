@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -70,7 +69,7 @@ def save_error_log(error_list):
             json.dump(error_list, f, indent=4, ensure_ascii=False)
     except Exception as e:
         logging.error(f"Fehler beim Speichern des Fehler-Logs: {e}")
-=======
+
 # -*- coding: utf-8 -*-
 import os
 import json
@@ -142,4 +141,4 @@ def save_error_log(error_list):
             json.dump(error_list, f, indent=4, ensure_ascii=False)
     except Exception as e:
         logging.error(f"Fehler beim Speichern des Fehler-Logs: {e}")
->>>>>>> aea6e0f3cc44f05c8b75f9cd480e934127c702a5
+
