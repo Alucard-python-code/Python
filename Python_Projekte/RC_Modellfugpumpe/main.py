@@ -1,41 +1,38 @@
 import time
 from config import sys_settings
+import hardware
 import menus
 import modes
 
 def display_welcome():
-    print("\n" * 5 + "="*40)
-    print(f"   WILLKOMMEN AN DER TANKSTATION")
-    print(f"   Besitzer: {sys_settings.owner_name}")
-    print(f"   Adresse:  {sys_settings.owner_address}")
-    print("="*40 + "\n")
-    time.sleep(3) # Auf 3 Sekunden für schnelleren Testlauf im Terminal gekürzt
+    hardware.lcd.clear()
+    hardware.lcd.move_to(0, 0); hardware.lcd.putstr("=== TANKSTATION ===")
+    hardware.lcd.move_to(0, 1); hardware.lcd.putstr(f"Pilot: {sys_settings.owner_name[:13]}")
+    hardware.lcd.move_to(0, 2); hardware.lcd.putstr(f"Adr: {sys_settings.owner_address[:15]}")
+    hardware.lcd.move_to(0, 3); hardware.lcd.putstr("Bitte warten (10s)..")
+    time.sleep(10) # Exakt 10 Sekunden Anzeige laut Pflichtenheft
 
 def main():
-    # 1. Gespeicherte Einstellungen vom Flash-Speicher laden
     sys_settings.load_from_flash()
-    
-    # 2. Begrüßung anzeigen (Besitzer-Info)
     display_welcome()
     
-    # 3. Sicherheits-PIN abfragen falls im Menü aktiviert
     if not menus.check_pin_dialog():
-        print("Systemzugriff verweigert!")
+        hardware.lcd.clear()
+        hardware.lcd.move_to(0, 1); hardware.lcd.putstr("ZUGRIFF VERWEIGERT!")
         return
 
-    # 4. Hauptmenü-Schleife
     options = ["Automatik", "Manuell", "Einstellungen"]
     idx = 0
     
     while True:
-        modes.display_clear()
-        print("--- HAUPTMENÜ ---")
+        hardware.lcd.clear()
+        hardware.lcd.move_to(0, 0); hardware.lcd.putstr("--- HAUPTMENUE ---")
         for i, opt in enumerate(options):
+            hardware.lcd.move_to(0, i+1)
             prefix = "> " if i == idx else "  "
-            print(f"{prefix}{opt}")
-        print("="*40)
+            hardware.lcd.putstr(f"{prefix}{opt}")
         
-        cmd = input("Auswahl mit [w] (hoch), [s] (runter), [e] (Bestätigen): ").lower()
+        cmd = input("Navigation [w/s], Bestaetigen [e]: ").lower()
         if cmd == 'w': idx = (idx - 1) % len(options)
         elif cmd == 's': idx = (idx + 1) % len(options)
         elif cmd == 'e':

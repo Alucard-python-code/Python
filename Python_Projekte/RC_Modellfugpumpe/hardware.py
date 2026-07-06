@@ -1,10 +1,13 @@
 import machine
 from config import sys_settings, PSI_TO_MBAR
+from lcd_api import Lcd
 
 # Hardware PIN-Belegung
 PIN_FLOW_SENS  = 5
 PIN_PWM_PUMP   = 6
 PIN_PRESSURE   = 26  # ADC0
+PIN_I2C_SDA    = 0   # Pico Pin 1
+PIN_I2C_SCL    = 1   # Pico Pin 2
 
 class PumpController:
     def __init__(self, pin_num):
@@ -50,6 +53,10 @@ class SensorReader:
     def reset_volume(self):
         self.pulse_count = 0
 
-# Instanzen für das System initialisieren
+# I2C & LCD Hardware initialisieren
+i2c = machine.I2C(0, sda=machine.Pin(PIN_I2C_SDA), scl=machine.Pin(PIN_I2C_SCL), freq=400000)
+lcd = Lcd(i2c, 0x27) # 0x27 ist der Standard für das Freenove 2004 LCD
+
+# Instanzen für das System
 pump = PumpController(PIN_PWM_PUMP)
 sensors = SensorReader(PIN_PRESSURE, PIN_FLOW_SENS)
