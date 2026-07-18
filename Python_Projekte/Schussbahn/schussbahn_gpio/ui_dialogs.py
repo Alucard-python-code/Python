@@ -1,239 +1,253 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-from PyQt5.QtWidgets import (QDialog, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, 
-                             QGridLayout, QTableWidget, QTableWidgetItem, QHeaderView, QListWidget)
-from PyQt5.QtGui import QFont
+from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer
-from config_loader import save_settings, load_operating_hours, load_error_log
+from PyQt5.QtGui import QFont
+from config_loader import save_settings, load_error_log, save_error_log
+
+class NumpadDialog(QDialog):
+    def __init__(self, parent=None, title="Eingabe", echo_mode=QLineEdit.Normal, allow_dot=True, key_name=""):
+        super().__init__(parent)
+        self.setWindowTitle("Eingabe")
+        self.setFixedSize(300, 500)
+        self.value = ""
+        
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel(f"Ändere: {key_name}"))
+        
+        self.display = QLineEdit()
+        self.display.setEchoMode(echo_mode)
+        self.display.setFixedHeight(40)
+        layout.addWidget(self.display)
+        
+        grid = QGridLayout()
+        buttons = ['7','8','9', '4','5','6', '1','2','3', 'C','0','.']
+        for i, btn in enumerate(buttons):
+            if btn == '.' and not allow_dot: continue
+            b = QPushButton(btn)
+            b.setFixedSize(60, 50)
+            b.clicked.connect(lambda ch, v=btn: self.add_digit(v))
+            grid.addWidget(b, i // 3, i % 3)
+        layout.addLayout(grid)
+        
+        btn_layout = QHBoxLayout()
+        btn_save = QPushButton("SPEICHERN")
+        btn_save.setStyleSheet("background-color: #28a745; color: white; height: 40px;")
+        btn_save.clicked.connect(self.accept)
+        btn_cancel = QPushButton("ABBRUCH")
+        btn_cancel.setStyleSheet("background-color: #dc3545; color: white; height: 40px;")
+        btn_cancel.clicked.connect(self.reject)
+        btn_layout.addWidget(btn_save)
+        btn_layout.addWidget(btn_cancel)
+        layout.addLayout(btn_layout)
+        self.setLayout(layout)
+
+    def add_digit(self, v):
+        if v == 'C': self.value = ""
+        else: self.value += v
+        self.display.setText(self.value)
 
 class SettingsWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
+        self.pin_fails = 0
+        self.fields = {}
         self.setWindowTitle("Einstellungen & Diagnose")
-        self.setFixedSize(900, 520)
-        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
-        self.setStyleSheet("background-color: #333333; color: white; border: 1px solid #555555;")
+        self.setFixedSize(1000, 950)
+        self.setStyleSheet("background-color: #222; color: white;")
         self.init_ui()
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update_leds)
+        self.timer.start(300)
 
-        self.ui_timer = QTimer(self)
-        self.ui_timer.timeout.connect(self.update_diagnostics)
-        self.ui_timer.start(200)
+    def format_time(self, minutes):
+        h = int(minutes) // 60
+        m = int(minutes) % 60
+        return f"{h:02d}:{m:02d}"
+
+    def create_styled_separator(self, text):
+        container = QWidget()
+        layout = QHBoxLayout(container)
+        layout.setContentsMargins(0, 5, 0, 5)
+        layout.setSpacing(10)
+        def get_line():
+            line = QFrame()
+            line.setFrameShape(QFrame.HLine)
+            line.setFrameShadow(QFrame.Sunken)
+            line.setStyleSheet("color: #FFD700; border: 1px solid #FFD700;")
+            return line
+        layout.addWidget(get_line())
+        lbl = QLabel(text)
+        lbl.setStyleSheet("color: #FFD700; font-weight: bold; font-size: 15px;")
+        lbl.setAlignment(Qt.AlignCenter)
+        layout.addWidget(lbl)
+        layout.addWidget(get_line())
+        return container
+
+    def create_param_row(self, key, show_change_btn=True):
+        internal_key = key.replace("(hh:mm)", "(min)")
+        row = QHBoxLayout()
+        lbl = QLabel(key)
+        lbl.setFixedWidth(200)
+        row.addWidget(lbl)
+        val = self.parent_app.times.get(internal_key, 0.0)
+        display_val = self.format_time(val) if "Laufzeit" in key or "Wartung" in key else str(val)
+        val_lbl = QLabel(display_val)
+        val_lbl.setFixedWidth(100)
+        self.fields[key] = val_lbl
+        row.addWidget(val_lbl)
+        if show_change_btn:
+            btn = QPushButton("Ändern")
+            btn.setFixedWidth(80)
+            btn.setStyleSheet("background-color: #444444; color: white;")
+            btn.clicked.connect(lambda ch, k=internal_key: self.secure_change(k))
+            row.addWidget(btn)
+        row.addStretch()
+        return row
 
     def init_ui(self):
-        layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
-
-        # Titelzeile mit Global Reset Button
-        top_bar = QHBoxLayout()
-        lbl_title = QLabel("Systemeinstellungen & Diagnose")
-        lbl_title.setFont(QFont("Arial", 16, QFont.Bold))
-        top_bar.addWidget(lbl_title)
+        main_layout = QHBoxLayout()
+        main_layout.setContentsMargins(20, 20, 20, 20)
         
-        btn_reset = QPushButton("GLOBAL SYSTEM RESET")
-        btn_reset.setFont(QFont("Arial", 11, QFont.Bold))
-        btn_reset.setStyleSheet("background-color: #772222; color: #ffcccc; padding: 6px; border-radius: 4px;")
-        btn_reset.clicked.connect(self.trigger_global_reset)
-        top_bar.addWidget(btn_reset)
-        layout.addLayout(top_bar)
+        col_left = QVBoxLayout()
+        col_left.addWidget(self.create_styled_separator("DIAGNOSE E/A"))
+        diag_grid = QGridLayout()
+        in_labels = ["Motorschutz", "Endschalter", "Schütz R", "Schütz L", "Schütz La", "Schütz Sc"]
+        out_labels = ["Rechts", "Links", "Langsam", "Schnell"]
+        self.leds = {}
+        for i in range(6):
+            diag_grid.addWidget(QLabel(in_labels[i]), i, 0)
+            led_c = QWidget(); l_lay = QHBoxLayout(led_c); l_lay.setContentsMargins(5,0,50,0)
+            l_lay.setSpacing(0)
+            self.leds[f"in_{i}"] = self.create_led("#00FF00")
+            l_lay.addWidget(self.leds[f"in_{i}"]); l_lay.addStretch()
+            diag_grid.addWidget(led_c, i, 1)
+            if i < 4:
+                diag_grid.addWidget(QLabel(out_labels[i]), i, 2)
+                led_c_out = QWidget(); lo_lay = QHBoxLayout(led_c_out); lo_lay.setContentsMargins(5,0,50,0)
+                lo_lay.setSpacing(0)
+                self.leds[f"out_{i}"] = self.create_led("#ffa500")
+                lo_lay.addWidget(self.leds[f"out_{i}"]); lo_lay.addStretch()
+                diag_grid.addWidget(led_c_out, i, 3)
+        col_left.addLayout(diag_grid)
 
-        grid = QGridLayout()
-        grid.setSpacing(6)
+        col_left.addWidget(self.create_styled_separator("FAHRZEITEN"))
+        for key in ["Beschuss Schnell", "Beschuss Langsam", "Bremszeit Vorwaerts", "Wertung Schnell", "Bremszeit Rueckwaerts"]:
+            col_left.addLayout(self.create_param_row(key))
+        col_left.addWidget(self.create_styled_separator("WATCHDOG ÜBERWACHUNG"))
+        for key in ["Watchdog Beschuss", "Watchdog Wertung"]:
+            col_left.addLayout(self.create_param_row(key))
+        col_left.addStretch()
 
-        # Spalte 1: Zeiten-Parameter
-        vbox_left = QVBoxLayout()
-        lbl_sect1 = QLabel("Fahrzeiten konfigurieren (Sek.)")
-        lbl_sect1.setFont(QFont("Arial", 12, QFont.Bold))
-        vbox_left.addWidget(lbl_sect1)
-
-        self.param_keys = [
-            "Beschuss Schnell", "Beschuss Langsam", "Bremszeit Vorwaerts",
-            "Wartezeit Kugelfang", "Wertung Schnell", "Bremszeit Rueckwaerts"
-        ]
-        self.fields = {}
-
-        for key in self.param_keys:
-            row_hb = QHBoxLayout()
-            lbl = QLabel(key + ":")
-            lbl.setFont(QFont("Arial", 10))
-            lbl.setFixedWidth(160)
-            
-            val_lbl = QLabel(f"{self.parent_app.times.get(key, 0.0):.2f}")
-            val_lbl.setFont(QFont("Arial", 12, QFont.Bold))
-            val_lbl.setStyleSheet("background-color: #222222; padding: 4px; border-radius: 3px;")
-            val_lbl.setAlignment(Qt.AlignCenter)
-            val_lbl.setFixedWidth(60)
-            self.fields[key] = val_lbl
-
-            btn_minus = QPushButton("-")
-            btn_minus.setFixedSize(36, 32)
-            btn_minus.clicked.connect(lambda checked, k=key: self.modify_value(k, -0.1))
-            
-            btn_plus = QPushButton("+")
-            btn_plus.setFixedSize(36, 32)
-            btn_plus.clicked.connect(lambda checked, k=key: self.modify_value(k, 0.1))
-
-            for b in [btn_minus, btn_plus]:
-                b.setStyleSheet("background-color: #444444; font-size: 16px; font-weight: bold;")
-
-            row_hb.addWidget(lbl)
-            row_hb.addWidget(btn_minus)
-            row_hb.addWidget(val_lbl)
-            row_hb.addWidget(btn_plus)
-            vbox_left.addLayout(row_hb)
-
-        # Tippbetrieb
-        lbl_tipp = QLabel("Manueller Tippbetrieb (Langsamlauf)")
-        lbl_tipp.setFont(QFont("Arial", 11, QFont.Bold))
-        lbl_tipp.setStyleSheet("margin-top: 6px; color: #ffaa00;")
-        vbox_left.addWidget(lbl_tipp)
-
-        tipp_hb = QHBoxLayout()
-        self.btn_tipp_vor = QPushButton("Tipp VOR")
-        self.btn_tipp_zurueck = QPushButton("Tipp ZURÜCK")
-        for b in [self.btn_tipp_vor, self.btn_tipp_zurueck]:
-            b.setFont(QFont("Arial", 11, QFont.Bold))
-            b.setStyleSheet("background-color: #3e4d3e; color: white; height: 35px; border-radius: 4px;")
+        line = QFrame(); line.setFrameShape(QFrame.VLine); line.setStyleSheet("border: 1px solid #444;")
         
-        self.btn_tipp_vor.pressed.connect(lambda: self.parent_app.start_tipp_mode("TippVor"))
-        self.btn_tipp_vor.released.connect(self.parent_app.stop_tipp_mode)
-        self.btn_tipp_zurueck.pressed.connect(lambda: self.parent_app.start_tipp_mode("TippRueck"))
-        self.btn_tipp_zurueck.released.connect(self.parent_app.stop_tipp_mode)
-
-        tipp_hb.addWidget(self.btn_tipp_zurueck)
-        tipp_hb.addWidget(self.btn_tipp_vor)
-        vbox_left.addLayout(tipp_hb)
-        grid.addLayout(vbox_left, 0, 0)
-
-        # Spalte 2: E/A Diagnose-Tabelle
-        vbox_right = QVBoxLayout()
-        lbl_sect2 = QLabel("Hardware E/A Live-Zustand")
-        lbl_sect2.setFont(QFont("Arial", 12, QFont.Bold))
-        vbox_right.addWidget(lbl_sect2)
-
-        self.table = QTableWidget(7, 4)
-        self.table.setHorizontalHeaderLabels(["Eingang", "Status", "Ausgang", "Status"])
-        self.table.verticalHeader().setVisible(False)
-        self.table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table.setStyleSheet("background-color: #252525; gridline-color: #444444; font-size: 11px;")
+        col_right = QVBoxLayout()
+        col_right.addWidget(self.create_styled_separator("WARTUNG"))
+        col_right.addLayout(self.create_param_row("Laufzeit Motor (hh:mm)", show_change_btn=False))
+        col_right.addLayout(self.create_param_row("Wartung Intervall (hh:mm)", show_change_btn=True))
         
-        inputs_desc = ["In1: Motorschutz", "In2: Endschalter", "In3: Schütz Rechts", "In4: Schütz Links", "In5: Schütz Langsam", "In6: Schütz Schnell", "-"]
-        coils_desc = ["Out1: Rechts", "Out2: Links", "Out3: Langsam", "Out4: Schnell", "-", "-", "-", "Out8: Licht"]
+        btn_reset = QPushButton("Motor-Laufzeit zurücksetzen")
+        btn_reset.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin: 10px 0;")
+        btn_reset.clicked.connect(self.secure_reset_motor)
+        col_right.addWidget(btn_reset)
+        
+        btn_pin = QPushButton("Service PIN ändern")
+        btn_pin.setStyleSheet("background-color: #444444; color: white; height: 40px;")
+        btn_pin.clicked.connect(lambda: self.secure_change("Service-PIN"))
+        col_right.addWidget(btn_pin)
 
-        for i in range(7):
-            self.table.setItem(i, 0, QTableWidgetItem(inputs_desc[i]))
-            self.table.setItem(i, 1, QTableWidgetItem("0"))
-            self.table.setItem(i, 2, QTableWidgetItem(coils_desc[i]))
-            self.table.setItem(i, 3, QTableWidgetItem("OFF"))
-            for col in range(4):
-                item = self.table.item(i, col)
-                if item: 
-                    item.setFlags(Qt.ItemIsSelectable | Qt.ItemIsEnabled)
-                    item.setTextAlignment(Qt.AlignCenter)
+        col_right.addWidget(self.create_styled_separator("FEHLERHISTORIE"))
+        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(300)
+        col_right.addWidget(self.log_widget)
 
-        vbox_right.addWidget(self.table)
+        btn_clear_log = QPushButton("Fehlerspeicher löschen")
+        btn_clear_log.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin-top: 5px;")
+        btn_clear_log.clicked.connect(self.secure_clear_logs)
+        col_right.addWidget(btn_clear_log)
 
-        # Betriebsstunden & Referenzstatus
-        self.lbl_hours = QLabel("Betriebsstunden: Ges: 0.0h | Fahrt: 0.0h")
-        self.lbl_hours.setFont(QFont("Arial", 10, QFont.Bold))
-        self.lbl_hours.setStyleSheet("color: #00ffcc;")
-        vbox_right.addWidget(self.lbl_hours)
+        btn_exit = QPushButton("Normalbetrieb")
+        btn_exit.setStyleSheet("margin-top: 20px; height: 50px; background-color: #458B00; color: white; font-weight: bold; font-size: 16px;")
+        btn_exit.clicked.connect(self.close)
+        col_right.addWidget(btn_exit)
+        col_right.addStretch()
 
-        self.lbl_ref_state = QLabel("Kalibrierung: Unbekannt")
-        self.lbl_ref_state.setFont(QFont("Arial", 10, QFont.Bold))
-        vbox_right.addWidget(self.lbl_ref_state)
+        main_layout.addLayout(col_left, 1); main_layout.addWidget(line); main_layout.addLayout(col_right, 1)
+        self.setLayout(main_layout); self.refresh_error_list_ui()
 
-        grid.addLayout(vbox_right, 0, 1)
-        layout.addLayout(grid)
+    def create_led(self, color):
+        led = QLabel(); led.setFixedSize(20, 20)
+        led.setStyleSheet("border-radius: 10px; background-color: #006400;")
+        led.active_color = color
+        return led
 
-        # Bereich Unten: Fehler-Logbox
-        lbl_err_title = QLabel("Letzte Systemmeldungen / Fehlerhistorie:")
-        lbl_err_title.setFont(QFont("Arial", 11, QFont.Bold))
-        layout.addWidget(lbl_err_title)
-
-        self.log_widget = QListWidget()
-        self.log_widget.setFixedHeight(80)
-        self.log_widget.setStyleSheet("background-color: #1a1a1a; color: #ff6666; font-family: monospace; font-size: 11px; border-radius: 4px;")
-        layout.addWidget(self.log_widget)
-
-        # Schließen
-        btn_close = QPushButton("Schließen & Speichern")
-        btn_close.setFont(QFont("Arial", 13, QFont.Bold))
-        btn_close.setStyleSheet("background-color: #444444; height: 40px; border-radius: 4px;")
-        btn_close.clicked.connect(self.close_window)
-        layout.addWidget(btn_close)
-
-        self.setLayout(layout)
-        self.refresh_error_list_ui()
+    def update_leds(self):
+        for i in range(6):
+            if i < len(self.parent_app.latest_inputs):
+                state = self.parent_app.latest_inputs[i]
+                if getattr(self.leds[f"in_{i}"], 'last_state', None) != state:
+                    c = "#00FF00" if state else "#006400"
+                    self.leds[f"in_{i}"].setStyleSheet(f"border-radius: 10px; background-color: {c};")
+                    self.leds[f"in_{i}"].last_state = state
+            if i < 4 and i < len(self.parent_app.latest_coils):
+                state_out = self.parent_app.latest_coils[i]
+                if getattr(self.leds[f"out_{i}"], 'last_state', None) != state_out:
+                    c = "#00FF00" if state_out else "#006400"
+                    self.leds[f"out_{i}"].setStyleSheet(f"border-radius: 10px; background-color: {c};")
+                    self.leds[f"out_{i}"].last_state = state_out
 
     def refresh_error_list_ui(self):
         self.log_widget.clear()
-        errors = load_error_log()
-        if not errors:
-            self.log_widget.addItem("Keine Fehler protokolliert. System läuft fehlerfrei.")
-            self.log_widget.item(0).setForeground(Qt.green)
-        else:
-            for err in errors:
-                self.log_widget.addItem(err)
+        for err in load_error_log(): self.log_widget.addItem(err)
 
-    def trigger_global_reset(self):
-        self.ui_timer.stop()
-        self.close()
-        self.parent_app.general_system_reset()
+    def secure_clear_logs(self):
+        pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung Löschen")
+        if pin_dlg.exec_() == QDialog.Accepted:
+            correct_pin = str(self.parent_app.times.get("Service-PIN", 1234))
+            if pin_dlg.value == correct_pin or (self.pin_fails >= 3 and pin_dlg.value == "9999"):
+                self.pin_fails = 0
+                save_error_log([])
+                self.refresh_error_list_ui()
+                QMessageBox.information(self, "Erfolg", "Fehlerspeicher wurde geleert.")
+            else:
+                self.pin_fails += 1
+                QMessageBox.warning(self, "Fehler", "Falscher PIN!")
 
-    def modify_value(self, key, delta):
-        cur = self.parent_app.times.get(key, 0.0)
-        new_val = round(max(0.0, min(30.0, cur + delta)), 2)
-        self.parent_app.times[key] = new_val
-        self.fields[key].setText(f"{new_val:.2f}")
+    def secure_reset_motor(self):
+        pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung Reset")
+        if pin_dlg.exec_() == QDialog.Accepted:
+            if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
+                self.parent_app.times["Laufzeit Motor (min)"] = 0.0
+                if "Laufzeit Motor (hh:mm)" in self.fields: self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
+                save_settings(self.parent_app.times)
 
-    def update_diagnostics(self):
-        # inputs: [ms, es, schütz_r, schütz_l, schütz_la, schütz_sc]
-        # coils:  [r, l, la, sc, 0, 0, 0, licht]
-        inputs = self.parent_app.latest_inputs
-        coils = self.parent_app.latest_coils
-
-        # Zuweisungen Tabelle Eingänge
-        for i in range(6):
-            val_str = "1 (Signal)" if inputs[i] == 1 else "0 (Offen)"
-            self.table.item(i, 1).setText(val_str)
-            if i == 0:  # Motorschutz ist Active-High OK
-                self.table.item(i, 1).setStyleSheet("color: #00ff00;" if inputs[i] == 1 else "color: #ff0000; font-weight: bold;")
-            elif i == 1:  # Endschalter
-                self.table.item(i, 1).setStyleSheet("color: #ffff00; font-weight: bold;" if inputs[i] == 1 else "color: white;")
-            else:  # Schütze Feedback
-                self.table.item(i, 1).setStyleSheet("color: #00ffcc;" if inputs[i] == 1 else "color: white;")
-
-        # Zuweisungen Tabelle Ausgänge
-        for i in range(4):
-            self.table.item(i, 3).setText("ON" if coils[i] else "OFF")
-            self.table.item(i, 3).setStyleSheet("color: #00ff00; font-weight: bold;" if coils[i] else "color: #888888;")
-
-        # Sonderzeile Ausgang 8 (Licht) in Zeile index 6 mappen
-        self.table.item(6, 3).setText("ON" if coils[7] else "OFF")
-        self.table.item(6, 3).setStyleSheet("color: #ffff00; font-weight: bold;" if coils[7] else "color: #888888;")
-
-        # Betriebsstunden
-        hd = load_operating_hours()
-        g_hours = hd.get("gesamt_sekunden", 0.0) / 3600.0
-        f_hours = hd.get("fahrzeit_sekunden", 0.0) / 3600.0
-        self.lbl_hours.setText(f"Betriebsstunden: Gesamt: {g_hours:.4f}h | Reine Fahrt: {f_hours:.4f}h")
-
-        # Referenzierungsstatus visualisieren
-        if self.parent_app.ist_referenziert:
-            self.lbl_ref_state.setText("Kalibrierung: Schlitten referenziert (Bereit)")
-            self.lbl_ref_state.setStyleSheet("color: #00ff00; font-weight: bold;")
-        else:
-            self.lbl_ref_state.setText("Kalibrierung: UNREFERENZIERT (Nächste Fahrt erfordert Home-Fahrt)")
-            self.lbl_ref_state.setStyleSheet("color: #ff3333; font-weight: bold;")
-
-        # Tipptasten sperren falls Automatik aktiv ist
-        state = not self.parent_app.is_driving and not self.parent_app.system_fault
-        self.btn_tipp_vor.setEnabled(state)
-        self.btn_tipp_zurueck.setEnabled(state)
-
-    def close_window(self):
-        self.ui_timer.stop()
-        save_settings(self.parent_app.times)
-        self.close()
+    def secure_change(self, key):
+        pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung")
+        if pin_dlg.exec_() == QDialog.Accepted:
+            if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
+                val_dlg = NumpadDialog(self, title="Ändern", echo_mode=QLineEdit.Normal, allow_dot=True, key_name=key)
+                if val_dlg.exec_() == QDialog.Accepted:
+                    new_val = val_dlg.value
+                    if not new_val: return
+                    try:
+                        if "(min)" in key or "Wartung" in key:
+                            val_float = float(new_val)
+                            self.parent_app.times[key] = val_float
+                            dk = key.replace("(min)", "(hh:mm)")
+                            if dk in self.fields:
+                                self.fields[dk].setText(self.format_time(val_float))
+                        else:
+                            self.parent_app.times[key] = new_val
+                            if key in self.fields:
+                                self.fields[key].setText(new_val)
+                        save_settings(self.parent_app.times)
+                        # Automatischer System-Reset bei PIN-Änderung zur Übernahme
+                        if key == "Service-PIN":
+                            QMessageBox.information(self, "Hinweis", "PIN wurde geändert. System wird neu initialisiert.")
+                            if hasattr(self.parent_app, 'trigger_system_reset'):
+                                self.parent_app.trigger_system_reset()
+                            self.accept()
+                    except ValueError:
+                        QMessageBox.critical(self, "Fehler", "Ungültiger Zahlenwert eingegeben!")
+            else:
+                QMessageBox.warning(self, "Zugriff verweigert", "Falscher Service-PIN!")

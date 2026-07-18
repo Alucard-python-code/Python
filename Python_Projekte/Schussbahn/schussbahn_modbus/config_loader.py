@@ -1,11 +1,10 @@
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import os
 import json
 import logging
 
-# Zentraler, unfehlbarer Ordner-Pfad direkt zur Laufzeit berechnet
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-
 SETTINGS_FILE = os.path.join(SCRIPT_DIR, "Einstellungswerte.json")
 HOURS_FILE = os.path.join(SCRIPT_DIR, "betriebsstunden.json")
 LOG_JSON_FILE = os.path.join(SCRIPT_DIR, "fehler_historie.json")
@@ -13,11 +12,15 @@ LOG_JSON_FILE = os.path.join(SCRIPT_DIR, "fehler_historie.json")
 DEFAULT_SETTINGS = {
     "Beschuss Schnell" : 3.0,
     "Beschuss Langsam" : 2.0,
+    "Bremszeit Vorwaerts" : 0.5,
+    "Wartezeit Kugelfang" : 0.5,
     "Wertung Schnell" : 2.5,
-    "Sicherheits-Timeout": 15.0,
-    "Home-Timeout": 25.0,
-    "Anlauf-Überwachung": 2.0,
-    "Wartungsintervall": 50.0,
+    "Bremszeit Rueckwaerts" : 0.5,
+    # Hinzugefügte Schlüssel für dein Projekt:
+    "Watchdog Beschuss": 10.0,
+    "Watchdog Wertung": 10.0,
+    "Laufzeit Motor (min)": 0.0,
+    "Wartung Intervall (min)": 500.0,
     "Service-PIN": 1234,
     "Modbus-IP": "192.168.8.203"
 }
@@ -26,7 +29,11 @@ def load_settings():
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-                return json.load(f)
+                settings = json.load(f)
+                # Merge mit Defaults, falls Schlüssel fehlen
+                full_settings = DEFAULT_SETTINGS.copy()
+                full_settings.update(settings)
+                return full_settings
         except Exception as e:
             logging.error(f"Fehler beim Laden der Einstellungen: {e}")
     return DEFAULT_SETTINGS.copy()
@@ -43,8 +50,8 @@ def load_operating_hours():
         try:
             with open(HOURS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except Exception as e:
-            logging.error(f"Fehler beim Laden der Betriebsstunden: {e}")
+        except Exception:
+            pass
     return {"gesamt_sekunden": 0.0, "fahrzeit_sekunden": 0.0}
 
 def save_operating_hours(hours):
@@ -59,8 +66,8 @@ def load_error_log():
         try:
             with open(LOG_JSON_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except Exception as e:
-            logging.error(f"Fehler beim Laden des Fehler-Logs: {e}")
+        except Exception:
+            pass
     return []
 
 def save_error_log(error_list):

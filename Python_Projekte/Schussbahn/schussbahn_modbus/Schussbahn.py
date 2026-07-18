@@ -11,7 +11,7 @@ from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
 from pyModbusTCP.client import ModbusClient
 
-from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log
+from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log, save_settings
 from ui_dialogs import SettingsWindow
 from drive_worker import DriveThread
 
@@ -67,6 +67,16 @@ class SchussbahnApp(QWidget):
 
         self.startup_safety_check()
 
+    def check_wartung_fällig(self):
+        laufzeit = self.times.get("Laufzeit Motor (min)", 0.0)
+        intervall = self.times.get("Wartung Intervall (min)", 500.0)
+        
+        if laufzeit >= intervall:
+            # Beispiel: Warnung im Status-Label anzeigen, wenn keine Fahrt stattfindet
+            if not self.is_driving:
+                self.status_msg.setText("WARTUNG FÄLLIG!")
+                self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding-left: 15px; border-radius: 6px; font-weight: bold;")
+
     def general_system_reset(self):
         """ Führt den globalen System-Reset aus und setzt den Referenzstatus zurück """
         try:
@@ -104,8 +114,18 @@ class SchussbahnApp(QWidget):
             self.autosave_counter = 0
 
     def add_drive_time(self, seconds):
+        # Bestehende Logik für Betriebsstunden
         self.hours_data["fahrzeit_sekunden"] += seconds
         save_operating_hours(self.hours_data) 
+        
+        # NEU: Laufzeit für Wartung in Minuten addieren
+        # seconds / 60 ergibt Minuten
+        neue_minuten = seconds / 60.0
+        aktuelle_laufzeit = self.times.get("Laufzeit Motor (min)", 0.0)
+        self.times["Laufzeit Motor (min)"] = aktuelle_laufzeit + neue_minuten
+        
+        # Speichere die aktualisierten Zeiten in der Einstellungs-JSON
+        save_settings(self.times)
 
     def init_ui(self):
         self.setStyleSheet("background-color: #2b2b2b; color: #ffffff;")
@@ -227,7 +247,7 @@ class SchussbahnApp(QWidget):
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        if not self.client.is_open(): self.client.open()
+        if not self.client.is_open: self.client.open()
         self.client.unit_id = 1
         if not self.client.write_multiple_coils(0, [False] * 8):
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
@@ -333,6 +353,7 @@ class SchussbahnApp(QWidget):
         self.drive_thread.io_update_signal.connect(self.handle_thread_io_update)
         self.drive_thread.drive_time_signal.connect(self.add_drive_time)
         
+        # HIER EINBINDEN: Live-Daten für die Einstellungs-Ansicht
         if hasattr(self, 'settings_window') and self.settings_window:
             self.drive_thread.io_update_signal.connect(self.settings_window.update_live_ios_safe)
             
@@ -442,26 +463,48 @@ class SchussbahnApp(QWidget):
             self.handle_exit()
 
     def start_tipp_mode(self, direction):
+        """ Startet den Tipp-Betrieb (manuelle Fahrt) """
         if self.system_fault or self.is_driving: 
             return
+        
         self.is_driving = True
         self.central_monitor_timer.stop()
-        self.thread = DriveThread(direction, self.client, self.times, ist_referenziert=self.ist_referenziert)
-        self.thread.io_update_signal.connect(self.handle_thread_io_update)
-        self.thread.drive_time_signal.connect(self.add_drive_time)
-        self.thread.start()
+        
+        # Konsistente Nutzung von self.drive_thread
+        self.drive_thread = DriveThread(
+            mode=direction, 
+            client=self.client, 
+            times=self.times, 
+            ist_referenziert=self.ist_referenziert
+        )
+        
+        self.drive_thread.io_update_signal.connect(self.handle_thread_io_update)
+        self.drive_thread.drive_time_signal.connect(self.add_drive_time)
+        
+        # Optional: Auch hier das Einstellungs-Fenster live aktualisieren, falls offen
+        if hasattr(self, 'settings_window') and self.settings_window:
+            self.drive_thread.io_update_signal.connect(self.settings_window.update_live_ios_safe)
+            
+        self.drive_thread.start()
 
     def stop_tipp_mode(self):
+        """ Stoppt den Tipp-Betrieb sicher """
         if not self.is_driving: 
             return
+            
         self.stop_position_animation() 
+        
         try:
-            if hasattr(self, 'thread') and self.thread.isRunning():
-                self.thread.stop()
-                self.thread.wait()
+            # Überprüfung der korrekten Thread-Variable
+            if hasattr(self, 'drive_thread') and self.drive_thread and self.drive_thread.isRunning():
+                self.drive_thread.stop()
+                self.drive_thread.wait()
+            
+            # SPS-Ausgänge auf Null setzen
             self.client.write_multiple_coils(0, [False] * 8)
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"Fehler beim Stoppen des Tipp-Modus: {e}")
+            
         self.is_driving = False
         self.central_monitor_timer.start(250)
 

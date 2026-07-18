@@ -1,9 +1,7 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
 import time
-import logging
 from PyQt5.QtCore import QThread, pyqtSignal
-from gpiozero import DigitalInputDevice, DigitalOutputDevice
 
 class DriveThread(QThread):
     status_signal = pyqtSignal(str)
@@ -12,27 +10,17 @@ class DriveThread(QThread):
     finished_signal = pyqtSignal()
     error_signal = pyqtSignal(str)
 
-    def __init__(self, mode, times, ist_referenziert=False):
+    def __init__(self, mode, times, ist_referenziert, out_data, in_data):
         super().__init__()
         self.mode = mode
         self.times = times
         self.ist_referenziert = ist_referenziert
         self._running = True
-
-        # Ausgänge initialisieren
-        self.out_rechts = DigitalOutputDevice(26, active_high=False, initial_value=False)
-        self.out_links  = DigitalOutputDevice(19, active_high=False, initial_value=False)
-        self.out_langsam = DigitalOutputDevice(13, active_high=False, initial_value=False)
-        self.out_schnell = DigitalOutputDevice(6,  active_high=False, initial_value=False)
-        self.out_licht   = DigitalOutputDevice(23, active_high=False, initial_value=False)
-
-        # Eingänge initialisieren
-        self.in_motorschutz = DigitalInputDevice(18, pull_up=True)
-        self.in_endschalter = DigitalInputDevice(10, pull_up=True)
-        self.in_schuetz_r   = DigitalInputDevice(20, pull_up=True)
-        self.in_schuetz_l   = DigitalInputDevice(21, pull_up=True)
-        self.in_schuetz_la  = DigitalInputDevice(16, pull_up=True)
-        self.in_schuetz_sc  = DigitalInputDevice(12, pull_up=True)
+        
+        # Hardware entpacken
+        self.out_rechts, self.out_links, self.out_langsam, self.out_schnell, self.out_licht = out_data
+        self.in_motorschutz, self.in_endschalter, self.in_schuetz_r, self.in_schuetz_l, \
+        self.in_schuetz_la, self.in_schuetz_sc = in_data
 
     def stop(self):
         self._running = False
@@ -105,7 +93,6 @@ class DriveThread(QThread):
         self.out_links.off()
         self.out_langsam.off()
         self.out_schnell.off()
-        self.emit_io_state()
 
     def sleep_and_check(self, duration):
         steps = int(duration / 0.05)
