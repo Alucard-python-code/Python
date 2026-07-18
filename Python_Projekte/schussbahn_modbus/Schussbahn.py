@@ -41,27 +41,39 @@ class SchussbahnApp(QWidget):
         self.latest_coils = []
         self.gui_error_list = load_error_log() 
 
+        # Nach dem Einschalten der App steht der Schlitten irgendwo -> noch nicht referenziert!
+        self.ist_referenziert = False
+
         modbus_ip = self.times.get("Modbus-IP", "192.168.8.203")
-        self.client = ModbusClient(host=modbus_ip, port=4196, timeout=2.0, auto_open=True, auto_close=True)
+        # Port auf 502 standardisiert bzw. deinen ursprünglichen Zustand beibehalten, Timeout kurz gehalten
+        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, auto_open=True, auto_close=False)
         
         # UI-Fixierung für exakt 1024x600 px
         self.setFixedSize(1024, 600)
         self.init_ui()
 
-        self.monitor_timer = QTimer(self)
-        self.monitor_timer.timeout.connect(self.cyclic_monitor)
+        # Zyklischer Monitor für Stillstand
+        self.central_monitor_timer = QTimer(self)
+        self.central_monitor_timer.timeout.connect(self.cyclic_monitor)
 
         self.hours_timer = QTimer(self)
         self.hours_timer.timeout.connect(self.track_total_hours)
         self.hours_timer.start(1000) 
 
+        # Timer für die rot blinkende Statusanzeige während der Referenzfahrt
+        self.blink_status = False
+        self.blink_timer = QTimer(self)
+        self.blink_timer.timeout.connect(self.toggle_blink_text)
+
         self.startup_safety_check()
 
     def general_system_reset(self):
+        """ Führt den globalen System-Reset aus und setzt den Referenzstatus zurück """
         try:
+            self.blink_timer.stop()
             self.is_driving = False
             self.system_fault = False
-            self.monitor_timer.stop()
+            self.central_monitor_timer.stop()
             self.client.close()
             time.sleep(0.1)
 
@@ -73,11 +85,12 @@ class SchussbahnApp(QWidget):
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
                 return False
 
-            self.client.unit_id = 1
             self.client.write_multiple_coils(0, [False] * 8)
 
             self.exit_requested = False
-            self.startup_safety_check() 
+            self.ist_referenziert = False  # Löscht den Referenzstatus -> Zwingt nächste Fahrt zu Langsamlauf
+            self.startup_safety_check()
+            logging.info("System-Reset durchgeführt. Modus HomeFahrt wird ausgeführt.")
             return True
         except Exception as e:
             logging.error(f"Kritischer Fehler beim generellen System-Reset: {e}")
@@ -122,49 +135,23 @@ class SchussbahnApp(QWidget):
             btn.setFont(button_font)
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
             
-            # FARB-ANPASSUNG: Exakt dasselbe Design wie die "Ändern"-Buttons
             if btn == self.btn_exit:
-                # Der Exit-Button bekommt ein dezentes Rot, bleibt aber im selben Stil
                 btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #552222;
-                        color: #ffaaaa;
-                        border: 1px solid #774444;
-                        border-radius: 4px;
-                    }
-                    QPushButton:pressed {
-                        background-color: #773333;
-                    }
-                    QPushButton:disabled {
-                        background-color: #221111;
-                        color: #553333;
-                        border: 1px solid #332222;
-                    }
+                    QPushButton { background-color: #552222; color: #ffaaaa; border: 1px solid #774444; border-radius: 4px; }
+                    QPushButton:pressed { background-color: #773333; }
+                    QPushButton:disabled { background-color: #221111; color: #553333; border: 1px solid #332222; }
                 """)
             else:
-                # Alle Standard-Buttons erhalten das originale dunkle Grau
                 btn.setStyleSheet("""
-                    QPushButton {
-                        background-color: #444444;
-                        color: white;
-                        border: 1px solid #555555;
-                        border-radius: 4px;
-                    }
-                    QPushButton:pressed {
-                        background-color: #666666;
-                    }
-                    QPushButton:disabled {
-                        background-color: #222222;
-                        color: #666666;
-                        border: 1px solid #333333;
-                    }
+                    QPushButton { background-color: #444444; color: white; border: 1px solid #555555; border-radius: 4px; }
+                    QPushButton:pressed { background-color: #666666; }
+                    QPushButton:disabled { background-color: #222222; color: #666666; border: 1px solid #333333; }
                 """)
                 
             grid_layout.addWidget(btn, row, col)
 
         main_layout.addLayout(grid_layout, stretch=60)
 
-        # Positions-Monitor flacher dimensioniert für 600px Begrenzung
         position_container = QWidget()
         position_container.setFixedHeight(75) 
         position_container.setStyleSheet("background-color: #1a1a1a; border-radius: 6px; border: 1px solid #444444;")
@@ -226,13 +213,21 @@ class SchussbahnApp(QWidget):
         self.btn_exit.clicked.connect(self.handle_exit)
         self.showFullScreen()
 
+    def toggle_blink_text(self):
+        """ Lässt das Statuslabel während der Referenzfahrt rot blinken """
+        if self.blink_status:
+            self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding-left: 15px; border-radius: 6px; font-weight: bold;")
+            self.blink_status = False
+        else:
+            self.status_msg.setStyleSheet("color: transparent; background-color: #111111; padding-left: 15px; border-radius: 6px; font-weight: bold;")
+            self.blink_status = True
+
     def handle_thread_io_update(self, inputs, coils):
-        """ Thread-sicheres Signal-Callback-Verfahren """
         self.latest_inputs = inputs
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        if not self.client.is_open: self.client.open()
+        if not self.client.is_open(): self.client.open()
         self.client.unit_id = 1
         if not self.client.write_multiple_coils(0, [False] * 8):
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
@@ -244,16 +239,18 @@ class SchussbahnApp(QWidget):
             return
 
         self.latest_inputs = inputs
-        if not inputs: 
+        if not inputs[0]: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst (In1=0)!")
         elif any(inputs[2:6]): 
             self.handle_system_error("FEHLER: Schütze nicht in Nullstellung!")
         else:
-            if inputs: 
+            if inputs[1]: 
                 self.status_msg.setText("zur Auswertung bereit")
                 self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
-                self.btn_beschuss.setEnabled(True); self.btn_wertung.setEnabled(False)
-                self.monitor_timer.start(250)
+                self.btn_beschuss.setEnabled(True)
+                self.btn_wertung.setEnabled(False)
+                self.ist_referenziert = True
+                self.central_monitor_timer.start(250)
             else: 
                 self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
@@ -287,40 +284,84 @@ class SchussbahnApp(QWidget):
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
-        if inputs[1]:  # In2 = True: Wagen steht am Stand / Startposition
+        if inputs[1]: 
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(True)
             self.btn_wertung.setEnabled(False)
-        else:          # In2 = False: Bahn ist frei für die Wertung
+        else: 
             self.status_msg.setText("Bahn frei? / Beschuss bereit")
             self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(True)
 
-    def start_drive(self, mode):
+    def start_drive(self, gewünschter_modus):
+        """ Startet den Fahr-Thread und erzwingt bei Bedarf die langsame, rot blinkende HomeFahrt """
+        if self.is_driving or self.system_fault:
+            return
+
+        # Abfangen von Schnell-Modi, wenn das System seine Position nicht kennt
+        if not self.ist_referenziert and gewünschter_modus in ["Beschuss", "Wertung"]:
+            effektiver_modus = "HomeFahrt"
+        else:
+            effektiver_modus = gewünschter_modus
+
         self.is_driving = True
-        self.monitor_timer.stop()
-        self.btn_beschuss.setEnabled(False)
-        self.btn_wertung.setEnabled(False)
-        self.btn_einstellungen.setEnabled(True)
+        self.central_monitor_timer.stop()
+        self.start_position_animation(effektiver_modus)
+
+        # Optische Alarmierung und Blink-Takt aktivieren
+        if effektiver_modus == "HomeFahrt" and not self.ist_referenziert:
+            self.status_msg.setText("ACHTUNG: REFERENZFAHRT AKTIV (LANGSAM)!")
+            self.blink_timer.start(500)
+        else:
+            self.blink_timer.stop()
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border-radius: 6px;")
+            self.status_msg.setText(f"Modus: {effektiver_modus} läuft...")
+
+        # Thread-Instanziierung
+        self.drive_thread = DriveThread(
+            mode=effektiver_modus, 
+            client=self.client, 
+            times=self.times, 
+            ist_referenziert=self.ist_referenziert
+        )
         
-        self.thread = DriveThread(mode, self.client, self.times)
-        # Thread-sichere Verbindung der Signale (Verhindert GUI-Abstürze)
-        self.thread.io_update_signal.connect(self.handle_thread_io_update)
-        self.thread.status_signal.connect(self.update_status)
-        self.thread.error_signal.connect(self.handle_system_error)
-        self.thread.finished_signal.connect(self.drive_finished)
-        self.thread.drive_time_signal.connect(self.add_drive_time)
-        self.thread.start()
+        # Signalverknüpfungen
+        self.drive_thread.status_signal.connect(self.update_status)
+        self.drive_thread.error_signal.connect(self.fahrt_abgebrochen_fehler)
+        self.drive_thread.io_update_signal.connect(self.handle_thread_io_update)
+        self.drive_thread.drive_time_signal.connect(self.add_drive_time)
         
-        # Grafik-Animation zeitgleich mit dem Motor starten
-        self.start_position_animation(mode)
+        if hasattr(self, 'settings_window') and self.settings_window:
+            self.drive_thread.io_update_signal.connect(self.settings_window.update_live_ios_safe)
+            
+        if effektiver_modus == "HomeFahrt":
+            self.drive_thread.finished_signal.connect(self.home_fahrt_erfolgreich)
+        else:
+            self.drive_thread.finished_signal.connect(self.drive_finished)
+
+        self.drive_thread.start()
+
+    def home_fahrt_erfolgreich(self):
+        """ Erfolgs-Callback nach Erreichen des Endschalters """
+        self.blink_timer.stop()
+        self.ist_referenziert = True
+        self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
+        self.status_msg.setText("zur Auswertung bereit")
+        self.drive_finished()
+
+    def fahrt_abgebrochen_fehler(self, error_msg):
+        """ Stoppt die optischen Effekte im Fehlerfall und leitet den Systemfehler ein """
+        self.blink_timer.stop()
+        self.ist_referenziert = False
+        self.handle_system_error(error_msg)
 
     def update_status(self, text):
-        self.status_msg.setText(text)
-        if text == "Unterwegs":
-            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border-radius: 6px;")
+        if not self.blink_timer.isActive():
+            self.status_msg.setText(text)
+            if text == "Unterwegs":
+                self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border-radius: 6px;")
 
     def drive_finished(self):
         self.stop_position_animation() 
@@ -328,22 +369,20 @@ class SchussbahnApp(QWidget):
         if self.exit_requested: 
             self.close_program_safely()
         else: 
-            self.monitor_timer.start(250)
+            self.central_monitor_timer.start(250)
 
     def handle_system_error(self, message):
         self.stop_position_animation() 
         self.is_driving = False
         self.system_fault = True
 
-        # Fehler mit Zeitstempel in das GUI-Logbuch eintragen
         timestamp = time.strftime("%d.%m.%Y %H:%M:%S")
         clean_msg = message.replace("FEHLER: ", "")
         self.gui_error_list.insert(0, f"[{timestamp}] {clean_msg}")
 
         if len(self.gui_error_list) > 5:
-            self.gui_error_list.pop() # Nur die neuesten 5 Vorfälle behalten
+            self.gui_error_list.pop()
 
-        # Fehlerliste sofort ausfallsicher auf die SD-Karte schreiben
         save_error_log(self.gui_error_list)
 
         try: 
@@ -356,11 +395,10 @@ class SchussbahnApp(QWidget):
         self.btn_beschuss.setEnabled(False)
         self.btn_wertung.setEnabled(False)
         
-        if not self.monitor_timer.isActive(): 
-            self.monitor_timer.start(250)
+        if not self.central_monitor_timer.isActive(): 
+            self.central_monitor_timer.start(250)
 
     def set_light(self, state): 
-        # Schützt das Lichtrelais vor schnellem Flattern (Hardware-Schonung)
         self.btn_licht_an.setEnabled(False)
         self.btn_licht_aus.setEnabled(False)
         try:
@@ -368,7 +406,6 @@ class SchussbahnApp(QWidget):
         except Exception as e:
             logging.error(f"Fehler beim Lichtschalten: {e}")
             
-        # Nach 500 Millisekunden die Licht-Buttons automatisch wieder freigeben
         QTimer.singleShot(500, lambda: self.btn_licht_an.setEnabled(True))
         QTimer.singleShot(500, lambda: self.btn_licht_aus.setEnabled(True))
 
@@ -387,9 +424,10 @@ class SchussbahnApp(QWidget):
             self.close_program_safely()
 
     def close_program_safely(self):
-        self.monitor_timer.stop()
+        self.central_monitor_timer.stop()
         self.hours_timer.stop() 
-        save_operating_hours(self.hours_data) # Beim regulären Beenden remanent sichern
+        self.blink_timer.stop()
+        save_operating_hours(self.hours_data)
         if hasattr(self, 'settings_window') and self.settings_window is not None: 
             self.settings_window.close()
         try: 
@@ -407,8 +445,8 @@ class SchussbahnApp(QWidget):
         if self.system_fault or self.is_driving: 
             return
         self.is_driving = True
-        self.monitor_timer.stop()
-        self.thread = DriveThread(direction, self.client, self.times)
+        self.central_monitor_timer.stop()
+        self.thread = DriveThread(direction, self.client, self.times, ist_referenziert=self.ist_referenziert)
         self.thread.io_update_signal.connect(self.handle_thread_io_update)
         self.thread.drive_time_signal.connect(self.add_drive_time)
         self.thread.start()
@@ -419,23 +457,18 @@ class SchussbahnApp(QWidget):
         self.stop_position_animation() 
         try:
             if hasattr(self, 'thread') and self.thread.isRunning():
-                self.thread.stop() # Setzt das sichere boolsche Flag im Thread (kein terminate)
+                self.thread.stop()
                 self.thread.wait()
             self.client.write_multiple_coils(0, [False] * 8)
         except:
             pass
         self.is_driving = False
-        self.monitor_timer.start(250)
-
-    def clear_gui_error_log(self):
-        self.gui_error_list = []
-        save_error_log(self.gui_error_list)
+        self.central_monitor_timer.start(250)
 
     def start_position_animation(self, mode):
         self.anim_mode = mode
         self.anim_start_time = time.time()
         
-        # Fahrtzeiten dynamisch aus den Settings laden
         self.t_beschuss_schnell = self.times.get("Beschuss Schnell", 3.0)
         self.t_beschuss_langsam = self.times.get("Beschuss Langsam", 2.0)
         self.t_wertung_schnell = self.times.get("Wertung Schnell", 2.5)
@@ -443,11 +476,11 @@ class SchussbahnApp(QWidget):
         self.animation_timer = QTimer(self)
         self.animation_timer.timeout.connect(self.process_target_movement)
         self.animation_timer.start(30)
+
     def process_target_movement(self):
         elapsed = time.time() - self.anim_start_time
         progress_percent = 0
 
-        # --- MODUS BESCHUSS (Wandert nach rechts zum Kugelfang) ---
         if self.anim_mode == "Beschuss":
             total_time = self.t_beschuss_schnell + self.t_beschuss_langsam
             if elapsed >= total_time:
@@ -456,7 +489,6 @@ class SchussbahnApp(QWidget):
             else:
                 progress_percent = int((elapsed / total_time) * 100)
 
-        # --- MODUS WERTUNG / HOME-FAHRT (Wandert nach links zum Stand) ---
         elif self.anim_mode in ["Wertung", "HomeFahrt"]:
             estimated_total = self.t_wertung_schnell + 3.0
             if elapsed >= estimated_total:
@@ -467,7 +499,6 @@ class SchussbahnApp(QWidget):
                 if progress_percent < 0: 
                     progress_percent = 0
 
-        # --- MODUS MANUELLER TIPPBETRIEB (Schrittweise Bewegung) ---
         elif self.anim_mode == "TippVor":
             progress_percent = self.track_bar.value() + 1
             if progress_percent > 100: 
@@ -477,18 +508,13 @@ class SchussbahnApp(QWidget):
             if progress_percent < 0: 
                 progress_percent = 0
 
-        # 1. Den Fortschrittsbalken im Hintergrund füllen
         self.track_bar.setValue(progress_percent)
 
-        # 2. POSITIONIERUNG DIREKT AUF DER SCHIENE (Optimiert für 1024x600)
         available_width = self.track_bar.width() - 25
         if available_width <= 0: 
             available_width = 750
 
-        # Prozentuale Position in Pixel-Koordinaten umrechnen
         target_x = int((progress_percent / 100.0) * available_width)
-
-        # Das Symbol auf der Schiene verschieben (Y-Wert perfekt zentriert bei -4px)
         self.moving_target.move(target_x, -4)
 
     def stop_position_animation(self):
@@ -496,15 +522,12 @@ class SchussbahnApp(QWidget):
             self.animation_timer.stop()
         try:
             inputs = self.client.read_discrete_inputs(0, 8)
-            if inputs and len(inputs) >= 2 and inputs[1]:  # In2 aktiv = Wagen steht am Stand
+            if inputs and len(inputs) >= 2 and inputs[1]:
                 self.track_bar.setValue(0)
                 self.moving_target.move(0, -3) 
         except:
             pass
 
-# ====================================================================
-# HAUPT-EINSTIEGSPUNKT DES PROGRAMMS
-# ====================================================================
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = SchussbahnApp()
