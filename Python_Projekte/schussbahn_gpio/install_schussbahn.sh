@@ -1,16 +1,11 @@
 #!/bin/bash
 
-# Zuweisung von Berechtigungen im Terminal: 
-# chmod +x /home/pi/Schussbahn_app/install_schussbahn.sh
-# Skript ausführen: 
-# ./install_schussbahn.sh
-
 # ====================================================================
 # AUTOMATISCHES EINRICHTUNGS-SKRIPT MIT EMOJI-ERWEITERUNG (GPIO)
 # ====================================================================
 
 # 1. Aktuellen Ordner ermitteln
-SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE}")" && pwd)
+SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "[INFO] Projekt-Ordner erkannt: $SCRIPT_DIR"
 
 # 2. System-Updates und Abhängigkeiten installieren
@@ -20,14 +15,14 @@ sudo apt-get update -y
 echo "[INFO] Installiere PyQt5 und GPIO-Bibliotheken..."
 sudo apt-get install -y python3-pip python3-pyqt5 python3-gpiozero
 
-# NEU: Installiert die Google-Emoji-Schriftart, damit das 🎯-Symbol keine Rechtecke mehr anzeigt
+# Installiert die Google-Emoji-Schriftart, damit das 🎯-Symbol keine Rechtecke mehr anzeigt
 echo "[INFO] Installiere Emoji-Fonts für die Zielscheibe (🎯)..."
 sudo apt-get install -y fonts-noto-color-emoji
 
-# 3. Ausführungsrechte für die Skripte vergeben
+# 3. Ausführungsrechte für die Skripte vergeben (Hier bleibt es bei Schussbahn.py)
 echo "[INFO] Vergebe Berechtigungen für Python- und Systemskripte..."
 chmod +x "$SCRIPT_DIR/Schussbahn.py"
-chmod +x "${BASH_SOURCE}"
+chmod +x "${BASH_SOURCE[0]}"
 
 # 4. Desktop-Verknüpfung erstellen
 echo "[INFO] Erstelle Verknüpfung auf dem Desktop..."
@@ -48,13 +43,13 @@ EOF
 chmod +x "$DESKTOP_FILE"
 gio set "$DESKTOP_FILE" metadata::trusted true 2>/dev/null
 
-# 5. Autostart einrichten (sobald der LXDE-Desktop geladen ist)
+# 5. Autostart einrichten
 echo "[INFO] Richte automatischen Programmstart beim Desktop-Login ein..."
 AUTOSTART_DIR="/home/$USER/.config/autostart"
 mkdir -p "$AUTOSTART_DIR"
 
-# Alte Modbus-Autostart-Datei entfernen, falls vorhanden, um Konflikte zu vermeiden
 rm -f "$AUTOSTART_DIR/schussbahn_autostart.desktop"
+rm -f "$AUTOSTART_DIR/schussbahn_gpio_autostart.desktop"
 
 cat <<EOF > "$AUTOSTART_DIR/schussbahn_gpio_autostart.desktop"
 [Desktop Entry]
@@ -68,7 +63,5 @@ EOF
 
 echo "===================================================================="
 echo "[ERFOLG] Die Schussbahn-GPIO-App wurde erfolgreich eingerichtet!"
-echo "[INFO] - Die Zielscheiben-Emojis wurden mitinstalliert."
-echo "[INFO] - Desktop-Verknüpfung und Autostart sind aktiv."
 echo "[WICHTIG] Bitte starte den Raspberry Pi jetzt einmal neu!"
 echo "===================================================================="
