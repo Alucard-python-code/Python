@@ -1,0 +1,1 @@
+ # mkdir -p ~/Desktop/Schussbahn && cd ~/Desktop && git clone https://github.com/Alucard-python-code/Python.git && cd Python/Python_Projekte && mv * ~/Desktop/Schussbahn && cd ~/Desktop/Schussbahn && chmod +x install.sh && sudo ./install.sh
