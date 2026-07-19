@@ -238,9 +238,28 @@ class SettingsWindow(QDialog):
         pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung Reset")
         if pin_dlg.exec_() == QDialog.Accepted:
             if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
+                
+                # 1. Werte in der Haupt-App zurücksetzen
                 self.parent_app.times["Laufzeit Motor (min)"] = 0.0
-                if "Laufzeit Motor (hh:mm)" in self.fields: self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
+                
+                # 2. Flag für das Wartungs-Popup wieder freigeben (damit es wieder erscheinen kann)
+                if hasattr(self.parent_app, 'wartung_popup_gezeigt'):
+                    self.parent_app.wartung_popup_gezeigt = False
+                
+                # 3. UI-Labels aktualisieren
+                if "Laufzeit Motor (hh:mm)" in self.fields: 
+                    self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
+                
+                # 4. Status-Label in der Haupt-App visuell zurücksetzen
+                self.parent_app.status_msg.setText("Wartung zurückgesetzt")
+                self.parent_app.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
+                
+                # 5. Daten speichern
                 save_settings(self.parent_app.times)
+                
+                QMessageBox.information(self, "Erfolg", "Motor-Laufzeit wurde auf 0 gesetzt.")
+            else:
+                QMessageBox.warning(self, "Fehler", "Falscher PIN!")
 
     def update_live_ios_safe(self, inputs, coils):
         """ Wird vom DriveThread aufgerufen, um LEDs während der Fahrt live zu aktualisieren """

@@ -5,8 +5,7 @@ import sys
 import os
 import logging
 import time
-from PyQt5.QtWidgets import (QApplication, QWidget, QPushButton, QLabel, QGridLayout, 
-                             QVBoxLayout, QHBoxLayout, QProgressBar, QSizePolicy)
+from PyQt5.QtWidgets import*
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
 from pyModbusTCP.client import ModbusClient
@@ -40,6 +39,8 @@ class SchussbahnApp(QWidget):
         self.latest_inputs = []
         self.latest_coils = []
         self.gui_error_list = load_error_log() 
+        self.reconnect_counter = 0 # Neuer Zähler in __init__
+        self.wartung_popup_gezeigt = False
 
         # Nach dem Einschalten der App steht der Schlitten irgendwo -> noch nicht referenziert!
         self.ist_referenziert = False
@@ -72,10 +73,22 @@ class SchussbahnApp(QWidget):
         intervall = self.times.get("Wartung Intervall (min)", 500.0)
         
         if laufzeit >= intervall:
-            # Beispiel: Warnung im Status-Label anzeigen, wenn keine Fahrt stattfindet
+            # UI-Anzeige im Status-Label
             if not self.is_driving:
                 self.status_msg.setText("WARTUNG FÄLLIG!")
                 self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding-left: 15px; border-radius: 6px; font-weight: bold;")
+            
+            # Popup nur einmal zeigen, wenn es noch nicht gezeigt wurde
+            if not self.wartung_popup_gezeigt:
+                self.wartung_popup_gezeigt = True  # Flag setzen
+                
+                msg = QMessageBox(self)
+                msg.setIcon(QMessageBox.Warning)
+                msg.setWindowTitle("Wartungshinweis")
+                msg.setText(f"Die Wartung ist fällig!\n\nAktuelle Laufzeit: {int(laufzeit)} min\nIntervall: {int(intervall)} min")
+                msg.setStandardButtons(QMessageBox.Ok)
+                msg.setStyleSheet("background-color: #2b2b2b; color: white;") # Dark-Mode Optik
+                msg.exec_()
 
     def general_system_reset(self):
         """ Führt den globalen System-Reset aus und setzt den Referenzstatus zurück """
@@ -279,20 +292,43 @@ class SchussbahnApp(QWidget):
                 self.start_drive("HomeFahrt")
 
     def cyclic_monitor(self):
-        if self.is_driving: return
+        # Wenn gerade eine Fahrt aktiv ist, Unterbrechung der zyklischen Überwachung
+        if self.is_driving: 
+            return
 
+        # --- RECONNECT LOGIK ---
+        # Prüfen, ob die Verbindung steht. Falls nicht, Reconnect versuchen.
+        if not self.client.is_open:
+            if not self.client.open():
+                # Status-UI für den Fehlerfall
+                self.status_msg.setText("FEHLER: Modbus Verbindung verloren! (Reconnect...)")
+                self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
+                self.btn_beschuss.setEnabled(False)
+                self.btn_wertung.setEnabled(False)
+                return # Nächster Versuch beim nächsten Timer-Tick
+        # -----------------------
+
+        # Modbus-Daten abrufen
         inputs = self.client.read_discrete_inputs(0, 8)
         coils = self.client.read_coils(0, 8)
 
+        # Validierung der Antwort
         if not inputs or len(inputs) < 6:
-            self.status_msg.setText("FEHLER: Modbus Verbindung verloren!")
+            self.status_msg.setText("FEHLER: Modbus Daten ungültig!")
             self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
-            self.btn_beschuss.setEnabled(False); self.btn_wertung.setEnabled(False)
+            self.btn_beschuss.setEnabled(False)
+            self.btn_wertung.setEnabled(False)
+            
+            # Bei ungültigen Daten Verbindung schließen, um sauberen Reconnect zu erzwingen
+            try: self.client.close()
+            except: pass
             return
 
+        # Daten zuweisen
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
 
+        # Systemfehler-Prüfung
         if self.system_fault:
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
@@ -300,10 +336,12 @@ class SchussbahnApp(QWidget):
             except: pass
             return 
 
+        # Hardware-Status-Prüfung
         if not inputs[0]: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
+        # UI-Update je nach Status
         if inputs[1]: 
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
