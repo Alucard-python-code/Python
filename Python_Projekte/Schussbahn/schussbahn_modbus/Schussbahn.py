@@ -261,6 +261,14 @@ class SchussbahnApp(QWidget):
 
     def startup_safety_check(self):
         if not self.client.is_open: self.client.open()
+
+        if not self.client.is_open:
+            self.update_ui_connectivity(False)
+            self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen!")
+            return
+            
+        self.update_ui_connectivity(True)
+
         self.client.unit_id = 1
         if not self.client.write_multiple_coils(0, [False] * 8):
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
@@ -303,6 +311,7 @@ class SchussbahnApp(QWidget):
                 # Status-UI für den Fehlerfall
                 self.status_msg.setText("FEHLER: Modbus Verbindung verloren! (Reconnect...)")
                 self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
+                self.update_ui_connectivity(False)
                 self.btn_beschuss.setEnabled(False)
                 self.btn_wertung.setEnabled(False)
                 return # Nächster Versuch beim nächsten Timer-Tick
@@ -323,6 +332,8 @@ class SchussbahnApp(QWidget):
             try: self.client.close()
             except: pass
             return
+
+        self.update_ui_connectivity(True)
 
         # Daten zuweisen
         self.latest_inputs = inputs
@@ -352,6 +363,15 @@ class SchussbahnApp(QWidget):
             self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(True)
+
+    def update_ui_connectivity(self, is_connected):
+        """Aktiviert/Deaktiviert die Licht-Buttons basierend auf dem Verbindungsstatus."""
+        self.btn_licht_an.setEnabled(is_connected)
+        self.btn_licht_aus.setEnabled(is_connected)
+        
+        # Optional: Visuelles Feedback, damit der User sieht, warum sie grau sind
+        opacity = 1.0 if is_connected else 0.3
+        self.btn_licht_an.setGraphicsEffect(QGraphicsOpacityEffect(opacity=opacity)) # Falls gewünscht
 
     def start_drive(self, gewünschter_modus):
         """ Startet den Fahr-Thread und erzwingt bei Bedarf die langsame, rot blinkende HomeFahrt """
@@ -461,9 +481,14 @@ class SchussbahnApp(QWidget):
         self.btn_licht_an.setEnabled(False)
         self.btn_licht_aus.setEnabled(False)
         try:
+            if not self.client.is_open:
+                raise Exception("Keine Verbindung")
             self.client.write_single_coil(7, state)
+            # Nach Erfolg wieder freigeben
+            QTimer.singleShot(500, lambda: self.update_ui_connectivity(True))
         except Exception as e:
             logging.error(f"Fehler beim Lichtschalten: {e}")
+            self.update_ui_connectivity(False)
             
         QTimer.singleShot(500, lambda: self.btn_licht_an.setEnabled(True))
         QTimer.singleShot(500, lambda: self.btn_licht_aus.setEnabled(True))
