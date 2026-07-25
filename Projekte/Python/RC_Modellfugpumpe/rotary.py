@@ -7,7 +7,14 @@
 # Documentation:
 #   https://github.com/MikeTeachman/micropython-rotary
 
-import micropython
+try:
+    import micropython
+except ImportError:
+    micropython = None
+
+
+def const(value):
+    return value
 
 _DIR_CW = const(0x10)  # Clockwise step
 _DIR_CCW = const(0x20)  # Counter-clockwise step

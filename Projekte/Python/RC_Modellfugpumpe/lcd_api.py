@@ -1,5 +1,15 @@
 import time
 
+if not hasattr(time, "sleep_ms"):
+    def _sleep_ms(ms):
+        time.sleep(ms / 1000.0)
+    time.sleep_ms = _sleep_ms
+
+if not hasattr(time, "sleep_us"):
+    def _sleep_us(us):
+        time.sleep(us / 1000000.0)
+    time.sleep_us = _sleep_us
+
 class Lcd:
     def __init__(self, i2c, i2c_addr):
         self.i2c = i2c
