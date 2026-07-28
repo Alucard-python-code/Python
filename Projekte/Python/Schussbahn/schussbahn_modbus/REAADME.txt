@@ -1,0 +1,46 @@
+immer diesen befhel ausführen damit das systhem funtioniert
+pip3 install pyModbusTCP --break-system-packages
+
+# Schussbahn-Steuerung (PyQt5 / Modbus)
+
+Diese Software steuert die motorisierte Schussbahn.
+Sie bietet eine Oberfläche für Betrieb und Diagnose.
+
+## 1. Inbetriebnahme
+* **Systemstart:** Die App prüft beim Start das System.
+* **Referenzfahrt:** Der Schlitten fährt automatisch in die Startposition.
+* **Betrieb:** Grünes Licht bedeutet, das System ist bereit.
+
+## 2. Bedienung im Normalbetrieb
+* **Beschuss:** Startet die Fahrt mit automatischen Geschwindigkeitsphasen.
+* **Wertung:** Fährt zum Ziel und stoppt am Endschalter.
+* **Licht:** Beleuchtung wird manuell über Buttons geschaltet.
+* **Tipp-Betrieb:** Dient zur manuellen Bewegung des Schlittens.
+
+## 3. Sicherheitsfunktionen
+* **Watchdog:** Stoppt die Fahrt bei Zeitüberschreitung automatisch ab.
+* **Motorschutz:** Bei Störungen unterbricht das System jede Bewegung.
+* **Verbindung:** Modbus-Abbrüche führen zum sofortigen Systemstopp.
+
+## 4. Einstellungen (Schritt-für-Schritt Anleitung)
+Zugriff nur mit der Service-PIN (Standard: 1234).
+
+1. **Öffnen:** Klicken Sie auf den Button "Einstellungen".
+2. **Ändern:** Klicken Sie bei einem Wert auf "Ändern".
+3. **Identifizieren:** Geben Sie Ihre Service-PIN ein.
+4. **Eingabe:** Tippen Sie den neuen Wert per Numpad ein.
+5. **Speichern:** Drücken Sie auf "SPEICHERN". Fertig.
+
+* **Wartung:** Ist die Laufzeit voll, erscheint eine Meldung.
+  Setzen Sie den Zähler nach der Wartung mit der PIN zurück.
+* **IP/PIN:** nach Änderungen erfolgt ein automatischer System-Neustart.
+* **Diagnose:** Grüne LEDs zeigen aktive Signale der Sensoren an.
+* **Fehler:** Das Logbuch listet Probleme mit Zeitstempel auf.
+
+## 5. Beenden
+* **Normalbetrieb:** Dieser Button schließt das Einstellungsmenü wieder.
+* **Programm:** Beenden Sie die App über das Menü.
+  Alle laufenden Fahrten werden zuvor sicher gestoppt.
+
+---
+*Hinweis: Bei PIN-Verlust hilft die Master-PIN 9999.*
