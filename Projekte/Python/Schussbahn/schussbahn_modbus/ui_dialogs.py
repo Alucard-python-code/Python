@@ -55,14 +55,21 @@ class SettingsWindow(QDialog):
         self.fields = {}
         self.setWindowTitle("Einstellungen & Diagnose")
         
-        # Rahmen entfernen und fest auf die Monitorgröße einstellen
-        self.setWindowFlags(Qt.FramelessWindowHint)
+        # WECHSEL VON FULLSCREEN ZU GEZWUNGENER GRÖSSE (Wayland-Fix):
+        # Wir entfernen die Windows-Ränder...
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setStyleSheet("background-color: #222; color: white;")
         
         self.init_ui()
+        
+        # ...und zwingen das Fenster exakt auf deine Bildschirmgröße!
+        self.setFixedSize(1024, 600)
+        self.move(0, 0) # Positioniert es perfekt in der linken oberen Ecke
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_leds)
         self.timer.start(300)
+
         
         # Vollbildmodus aktivieren
         self.showFullScreen()
