@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont, QIcon
 from gpiozero import DigitalInputDevice, OutputDevice
-from config_loader import load_settings, save_settings, add_to_error_log
+from config_loader import load_settings, save_settings, save_error_log
 from ui_dialogs import SettingsWindow
 from drive_worker import DriveThread
 
@@ -297,7 +297,7 @@ class SchussbahnApp(QMainWindow):
         # Roter Alarmbalken (Exakt wie bei der Modbus-Variante)
         self.status_msg.setStyleSheet("color: #ffffff; background-color: #B22222; padding: 15px; border-radius: 6px;")
         self.status_msg.setText(message)
-        add_to_error_log(message)
+        save_error_log(message)
         
         # Hardware komplett abschalten
         self.out_rechts.off()
