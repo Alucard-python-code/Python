@@ -1,3 +1,6 @@
+immer diesen befhel ausführen damit das systhem funtioniert
+pip3 install pyModbusTCP --break-system-packages
+
 # Schussbahn-Steuerung (PyQt5 / Modbus)
 
 Diese Software steuert die motorisierte Schussbahn.
