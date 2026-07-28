@@ -17,93 +17,105 @@ class DriveThread(QThread):
         except: return False
 
     def check_inputs_during_flight(self):
-        """
-        Prüft den Status der Eingänge während der Fahrt.
-        Löst bei Sicherheitsverletzungen oder Kommunikationsfehlern eine 
-        Exception aus, um das System in den sicheren Zustand zu versetzen.
-        """
-        # Prüfen, ob der Thread manuell gestoppt wurde
         if not self._is_running:
             raise Exception("Thread wurde manuell gestoppt")
-        
+
         try:
-            # Daten vom Modbus lesen
             inputs = self.client.read_discrete_inputs(0, 8)
             coils = self.client.read_coils(0, 8)
-            
-            # Überprüfen, ob Daten empfangen wurden
+
             if inputs and len(inputs) >= 6:
-                # UI über den aktuellen Status informieren
                 self.io_update_signal.emit(inputs, coils if coils else [False]*8)
-                
-                # Sicherheits-Check: Motorschutz (Index 0) ist ein Schließer/Öffner-Check
-                # Wenn der Eingang "0" ist (ausgelöst), wird die Fahrt sofort abgebrochen
+
                 if not inputs[0]:
                     raise Exception("Sicherheitskreis unterbrochen (Motorschutz)")
-                
                 return True
-            
-            # Wenn keine gültigen Daten empfangen wurden, ist die Kommunikation unterbrochen
+
             raise Exception("Kommunikationsfehler: Ungültige IO-Daten empfangen")
-            
         except Exception as e:
-            # Jede Exception hier führt dazu, dass der Thread in den 
-            # except-Block von 'run' springt und die Schütze abschaltet.
-            raise Exception(f"Sicherheitsabbruch: {str(e)}")
+            raise Exception(f"{str(e)}")
 
     def run(self):
         start_time = time.time()
-        # Watchdog Zeit holen (Standard 10.0 Sekunden falls nicht in times)
-        wd_limit = self.times.get("Watchdog Beschuss", 10.0) if self.mode == "Beschuss" else self.times.get("Watchdog Wertung", 10.0)
+        
+        # Watchdog-Zeiten zuweisen
+        if self.mode == "Beschuss":
+            wd_limit = self.times.get("Watchdog Beschuss", 10.0)
+        elif self.mode == "Wertung":
+            wd_limit = self.times.get("Watchdog Wertung", 10.0)
+        else:
+            wd_limit = self.times.get("Watchdog HomeFahrt", 20.0) # Einstellbarer oder fester Standard-Wert
 
         try:
-            # Hilfsfunktion zur Überwachung
             def check_watchdog():
                 if (time.time() - start_time) > wd_limit:
-                    raise Exception(f"WATCHDOG: Timeout bei {self.mode} erreicht ({wd_limit}s)")
+                    if self.mode == "HomeFahrt":
+                        # Spezieller Text für das Abfragefenster in der GUI
+                        raise Exception("TIMEOUT_HOMEFAHRT")
+                    else:
+                        raise Exception(f"WATCHDOG: Timeout bei {self.mode} erreicht ({wd_limit}s)")
 
+            # ====================================================================
+            # 1. MODUS: BESCHUSS
+            # ====================================================================
             if self.mode == "Beschuss":
                 self.write_hardware_coil(0, True); time.sleep(0.1); self.write_hardware_coil(3, True)
-                
-                # Schnellphase
+
                 end_time_schnell = time.time() + self.times["Beschuss Schnell"]
                 while time.time() < end_time_schnell:
                     check_watchdog()
                     self.check_inputs_during_flight()
                     time.sleep(0.05)
-                
+
                 self.write_hardware_coil(3, False); self.write_hardware_coil(2, True)
-                
-                # Langsamphase
+
                 end_time_langsam = time.time() + self.times["Beschuss Langsam"]
                 while time.time() < end_time_langsam:
                     check_watchdog()
                     self.check_inputs_during_flight()
                     time.sleep(0.05)
-                
-                # Abschalten
+
                 self.write_hardware_coil(0, False); self.write_hardware_coil(2, False)
 
+            # ====================================================================
+            # 2. MODUS: WERTUNG
+            # ====================================================================
             elif self.mode == "Wertung":
                 self.write_hardware_coil(1, True); time.sleep(0.1); self.write_hardware_coil(3, True)
-                
-                # Überwachung während der Wertungsfahrt
+
                 while self._is_running:
                     check_watchdog()
                     self.check_inputs_during_flight()
-                    # Endschalter-Abfrage (Index 1)
-                    if self.client.read_discrete_inputs(0, 8)[1]: 
+                    
+                    inputs = self.client.read_discrete_inputs(0, 8)
+                    if inputs and inputs[1]: 
                         break
                     time.sleep(0.05)
-                
-                # Abschalten
+
+                self.write_hardware_coil(1, False); self.write_hardware_coil(3, False)
+
+            # ====================================================================
+            # 3. MODUS: HOMEFAHRT
+            # ====================================================================
+            elif self.mode == "HomeFahrt":
+                self.write_hardware_coil(1, True); time.sleep(0.1); self.write_hardware_coil(2, True)
+
+                while self._is_running:
+                    check_watchdog()
+                    self.check_inputs_during_flight()
+                    
+                    inputs = self.client.read_discrete_inputs(0, 8)
+                    if inputs and inputs[1]: 
+                        break
+                    time.sleep(0.05)
+
                 self.write_hardware_coil(1, False); self.write_hardware_coil(2, False)
 
             self.drive_time_signal.emit(time.time() - start_time)
             self.finished_signal.emit()
 
         except Exception as e:
-            # Zentrales Aufräumen im Fehlerfall: Alle Ausgänge sicher ausschalten
+            # Im Fehlerfall sofort alle Ausgänge abschalten
             for i in range(8):
                 self.write_hardware_coil(i, False)
             self.error_signal.emit(str(e))

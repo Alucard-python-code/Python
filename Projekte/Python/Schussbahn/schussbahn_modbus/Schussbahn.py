@@ -431,10 +431,36 @@ class SchussbahnApp(QWidget):
         self.drive_finished()
 
     def fahrt_abgebrochen_fehler(self, error_msg):
-        """ Stoppt die optischen Effekte im Fehlerfall und leitet den Systemfehler ein """
+        """ Stoppt die optischen Effekte und prüft auf HomeFahrt-Wiederholung """
         self.blink_timer.stop()
-        self.ist_referenziert = False
-        self.handle_system_error(error_msg)
+        
+        # Falls es ein HomeFahrt-Timeout war: Frage den Benutzer interaktiv
+        if error_msg == "TIMEOUT_HOMEFAHRT":
+            self.is_driving = False
+            
+            # Schickes, dunkles Abfrage-Popup erzeugen
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Position unbekannt")
+            msg.setText("Der Wagen hat den Endschalter im Zeitfenster nicht erreicht.\n\nSoll die HomeFahrt wiederholt werden?")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg.setDefaultButton(QMessageBox.Yes)
+            msg.setStyleSheet("background-color: #2b2b2b; color: white; font-size: 14px;")
+            
+            if msg.exec_() == QMessageBox.Yes:
+                # Benutzer will wiederholen -> Starte erneuten Versuch
+                self.status_msg.setText("Wiederhole HomeFahrt...")
+                self.start_drive("HomeFahrt")
+            else:
+                # Benutzer drückt Nein -> Jetzt erst echtes System-Fault setzen
+                self.ist_referenziert = False
+                self.handle_system_error("FEHLER: Referenzfahrt abgebrochen (Zeitüberschreitung)!")
+        
+        else:
+            # Jeder andere Hardware-Fehler (z.B. Motorschutzschalter) sperrt sofort hart
+            self.ist_referenziert = False
+            self.handle_system_error(error_msg)
+
 
     def update_status(self, text):
         if not self.blink_timer.isActive():

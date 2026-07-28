@@ -227,23 +227,35 @@ class SchussbahnApp(QWidget):
     def start_drive(self, modus):
         if self.is_driving or self.system_fault: return
         effektiver_modus = "HomeFahrt" if not self.ist_referenziert and modus in ["Beschuss", "Wertung"] else modus
-        
+
         self.is_driving = True
         self.monitor_timer.stop()
-        
+
+        # Blink-Status für das Warnblink-Label aktivieren
+        if effektiver_modus == "HomeFahrt":
+            self.status_msg.setText("ACHTUNG: REFERENZFAHRT AKTIV (LANGSAM)!")
+            self.blink_timer.start(500)
+        else:
+            self.blink_timer.stop()
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 15px; border-radius: 6px;")
+            self.status_msg.setText(f"Modus: {effektiver_modus} läuft...")
+
         out_tuple = (self.out_rechts, self.out_links, self.out_langsam, self.out_schnell, self.out_licht)
-        in_tuple = (self.in_motorschutz, self.in_endschalter, self.in_schuetz_r, self.in_schuetz_l, 
-                    self.in_schuetz_la, self.in_schuetz_sc)
-        
+        in_tuple = (self.in_motorschutz, self.in_endschalter, self.in_schuetz_r, self.in_schuetz_l, self.in_schuetz_la, self.in_schuetz_sc)
+
         self.thread = DriveThread(effektiver_modus, self.times, self.ist_referenziert, out_tuple, in_tuple)
         self.thread.io_update_signal.connect(self.handle_thread_io_update)
         self.thread.status_signal.connect(self.update_status)
-        self.thread.finished_signal.connect(self.drive_finished)
-        self.thread.error_signal.connect(self.handle_system_error)
-        self.thread.start()
         
-        # Optional: UI-Feedback geben
-        print(f"Starte Modus: {effektiver_modus}")
+        # Geänderter Callback für den Erfolgsfall der HomeFahrt
+        if effektiver_modus == "HomeFahrt":
+            self.thread.finished_signal.connect(self.home_fahrt_erfolgreich)
+        else:
+            self.thread.finished_signal.connect(self.drive_finished)
+            
+        # WICHTIG: Fehler-Signal geht an unsere Weiche, nicht mehr direkt an handle_system_error!
+        self.thread.error_signal.connect(self.fahrt_abgebrochen_fehler)
+        self.thread.start()
 
     def home_fahrt_erfolgreich(self):
         self.blink_timer.stop()
@@ -259,9 +271,32 @@ class SchussbahnApp(QWidget):
         event.accept()
 
     def fahrt_abgebrochen_fehler(self, error_msg):
+        """ Fängt den Watchdog ab und fragt interaktiv nach einer Wiederholung """
         self.blink_timer.stop()
-        self.ist_referenziert = False
-        self.handle_system_error(error_msg)
+        
+        if error_msg == "TIMEOUT_HOMEFAHRT":
+            self.is_driving = False
+            self.all_outputs_off() # Schütze sicherheitshalber sofort abfallen lassen
+            
+            # Schicke, dunkle MessageBox passend zum UI-Design
+            msg = QMessageBox(self)
+            msg.setIcon(QMessageBox.Question)
+            msg.setWindowTitle("Position unbekannt")
+            msg.setText("Der Wagen hat den Endschalter im Zeitfenster nicht erreicht.\n\nSoll die HomeFahrt fortgesetzt werden?")
+            msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+            msg.setDefaultButton(QMessageBox.Yes)
+            msg.setStyleSheet("background-color: #2b2b2b; color: white; font-size: 14px;")
+            
+            if msg.exec_() == QMessageBox.Yes:
+                self.status_msg.setText("Wiederhole HomeFahrt...")
+                self.start_drive("HomeFahrt")
+            else:
+                self.ist_referenziert = False
+                self.handle_system_error("FEHLER: Referenzfahrt durch Benutzer abgebrochen!")
+        else:
+            # Bei allen anderen echten Hardwaredefekten (z.B. Motorschutz) hart sperren
+            self.ist_referenziert = False
+            self.handle_system_error(error_msg)
 
     def update_status(self, text):
         if not self.blink_timer.isActive():
