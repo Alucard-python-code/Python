@@ -194,7 +194,7 @@ class SettingsWindow(QDialog):
         col_right = QVBoxLayout()
         col_right.addWidget(self.create_styled_separator("NETZWERK & MODBUS KONFIGURATION"))
         # Hier ist das IP-Einstellungsfeld für die Modbus-Variante eingepflegt
-        col_right.addLayout(self.create_param_row("Modbus-Server IP", show_change_btn=True))
+        col_right.addLayout(self.create_param_row("Modbus-IP", show_change_btn=True))
 
         col_right.addWidget(self.create_styled_separator("WARTUNG"))
         col_right.addLayout(self.create_param_row("Laufzeit Motor (hh:mm)", show_change_btn=False))

@@ -122,7 +122,7 @@ from gpiozero.pins.lgpio import LGPIOFactory
 fan = PWMOutputDevice(18, frequency=100, initial_value=0.25, pin_factory=LGPIOFactory())
 cpu = CPUTemperature()
 while True:
-    fan.value = 0.25 if cpu.temperature < 40 else min(1.0, (cpu.temperature - 40) / 35)
+    fan.value = 0.45 if cpu.temperature < 40 else min(1.0, (cpu.temperature - 40) / 35)
     time.sleep(5)
 PYTHON_EOF
 
