@@ -1,15 +1,12 @@
 #!/bin/bash
 
 # ====================================================================
-# MASTER-INSTALLATIONSSKRIPT (GitHub & Minimal-Download)
+# MASTER-INSTALLATIONSSKRIPT (GitHub, Minimal-Download & Auto-Resolution)
 # ====================================================================
 
 # HIER DEINE GITHUB-DATEN EINTRAGEN
-GITHUB_REPO_URL="https://github.com/Alucard-python-code/Python.git"
+GITHUB_REPO_URL="https://github.com"
 GITHUB_BRANCH="main" # oder "master"
-
-# HIER DEINE GEWÜNSCHTE AUFLÖSUNG EINTRAGEN
-HDMI_MODE=85 
 
 # 1. Root-Check & Ermittlung des echten Benutzers
 if [ "$EUID" -ne 0 ]; then
@@ -25,14 +22,8 @@ fi
 
 REAL_HOME="/home/$REAL_USER"
 
-# 2. Auflösung konfigurieren
-echo "[INFO] Konfiguriere System-Auflösung..."
-sed -i '/hdmi_group/d' /boot/config.txt
-sed -i '/hdmi_mode/d' /boot/config.txt
-sed -i '/hdmi_force_hotplug/d' /boot/config.txt
-echo "hdmi_force_hotplug=1" >> /boot/config.txt
-echo "hdmi_group=2" >> /boot/config.txt
-echo "hdmi_mode=$HDMI_MODE" >> /boot/config.txt
+# 2. Monitor-Konfiguration unberührt lassen (System entscheidet selbst)
+echo "[INFO] Nutze die automatische Standard-Auflösung des Bildschirms..."
 
 # 3. Internet-Check
 if ! ping -c 1 8.8.8.8 &> /dev/null; then
@@ -82,22 +73,16 @@ rm -rf "$TEMP_CLONE_DIR"
 mkdir -p "$TEMP_CLONE_DIR"
 cd "$TEMP_CLONE_DIR"
 
-# Git initialisieren und auf den Zielordner beschränken
 git init -q
 git remote add origin "$GITHUB_REPO_URL"
 git config core.sparseCheckout true
-
-# Nur den ausgewählten Unterordner für den Download definieren
 echo "$TARGET_SUBFOLDER/" >> .git/info/sparse-checkout
 
-# Nur diesen spezifischen Ordner vom Server abrufen
-echo "[INFO] Downloade ausschließlich Ordner: $TARGET_SUBFOLDER..."
 if ! git pull origin "$GITHUB_BRANCH" --depth=1; then
-    echo "[FEHLER] Download von GitHub fehlgeschlagen! Überprüfe URL und Branch-Namen."
+    echo "[FEHLER] Download von GitHub fehlgeschlagen!"
     exit 1
 fi
 
-# Dateien an den finalen Zielort verschieben und aufräumen
 mkdir -p "$INSTALL_PATH"
 if [ -d "$TARGET_SUBFOLDER" ]; then
     cp -r "$TARGET_SUBFOLDER/"* "$INSTALL_PATH/"
@@ -107,15 +92,14 @@ else
     exit 1
 fi
 
-# Temporären Download-Müll sofort restlos löschen
+# Temporären Git-Ballast sofort restlos löschen
 cd /
 rm -rf "$TEMP_CLONE_DIR"
 
-# Version schreiben und Rechte an den Pi-User übergeben
 echo "Version: 1.0 (GitHub Stand: $(date))" > "$INSTALL_PATH/version.txt"
 chown -R "$REAL_USER":"$REAL_USER" "$INSTALL_PATH"
 
-# 8. Abhängigkeiten installieren (Immer aktiv)
+# 8. Abhängigkeiten installieren (GPIO & Modbus immer aktiv)
 echo "[INFO] Installiere APT-Abhängigkeiten (GPIO & GUI)..."
 apt-get install -y python3-pip python3-pyqt5 fonts-noto-color-emoji python3-gpiozero python3-lgpio
 
@@ -138,7 +122,6 @@ PYTHON_EOF
 
 chmod +x /usr/local/bin/case_fan_control.py
 
-# Dienst erstellen
 cat << 'SERVICE_EOF' > /etc/systemd/system/case_fan.service
 [Unit]
 Description=PWM Luefter
@@ -152,7 +135,7 @@ SERVICE_EOF
 systemctl daemon-reload
 systemctl enable case_fan.service && systemctl restart case_fan.service
 
-# 10. Desktop-Verknüpfung & Autostart (mit korrekter User-Rechte-Zuweisung)
+# 10. Desktop-Verknüpfung & Autostart
 DESKTOP_FILE="$REAL_HOME/Desktop/Schussbahn.desktop"
 cat <<EOF > "$DESKTOP_FILE"
 [Desktop Entry]
@@ -166,7 +149,7 @@ EOF
 chmod +x "$DESKTOP_FILE"
 chown "$REAL_USER":"$REAL_USER" "$DESKTOP_FILE"
 
-# Desktop-Icon als vertrauenswürdig markieren (Behebt Blockierung auf dem Pi)
+# Desktop-Icon für Benutzeroberfläche freischalten
 sudo -u "$REAL_USER" DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u $REAL_USER)/bus gio set "$DESKTOP_FILE" metadata::trusted true 2>/dev/null
 
 # Autostart einrichten
@@ -183,7 +166,7 @@ EOF
 chown -R "$REAL_USER":"$REAL_USER" "$REAL_HOME/.config/autostart"
 
 echo "[ERFOLG] Installation abgeschlossen!"
-echo "[INFO] Übrig geblieben ist nur: $INSTALL_PATH"
+echo "[INFO] Übrig gebliebener App-Ordner: $INSTALL_PATH"
 echo "[INFO] Logs finden sich unter $REAL_HOME/Desktop/schussbahn.log"
 echo "[INFO] Neustart in 5 Sekunden..."
 sleep 5
