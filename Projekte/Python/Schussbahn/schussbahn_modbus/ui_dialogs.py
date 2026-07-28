@@ -46,6 +46,7 @@ class NumpadDialog(QDialog):
         if v == 'C': self.value = ""
         else: self.value += v
         self.display.setText(self.value)
+
 class SettingsWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -54,13 +55,17 @@ class SettingsWindow(QDialog):
         self.fields = {}
         self.setWindowTitle("Einstellungen & Diagnose")
         
-        # Begrenzung auf exakt 700 Pixel Höhe für deinen Bildschirm
-        self.setFixedSize(1000, 700)
+        # NEU: Rahmen entfernen und Vollbild erzwingen (1024x600)
+        self.setWindowFlags(Qt.FramelessWindowHint)
         self.setStyleSheet("background-color: #222; color: white;")
+        
         self.init_ui()
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_leds)
         self.timer.start(300)
+        
+        # Fenster in den echten Vollbildmodus versetzen
+        self.showFullScreen()
 
     def format_time(self, minutes):
         h = int(minutes) // 60
@@ -106,12 +111,12 @@ class SettingsWindow(QDialog):
             row.addWidget(btn)
         row.addStretch()
         return row
-
     def init_ui(self):
+        # Hauptlayout für das gesamte Vollbild-Fenster
         outer_layout = QVBoxLayout(self)
-        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setContentsMargins(10, 10, 10, 10)
 
-        # ScrollArea-Einbindung für die Touch-Bedienung
+        # ScrollArea für komfortables Wischen auf dem Touchscreen
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #222; }")
@@ -119,8 +124,9 @@ class SettingsWindow(QDialog):
         content_widget = QWidget()
         content_widget.setStyleSheet("background-color: #222;")
         main_layout = QHBoxLayout(content_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setContentsMargins(10, 10, 10, 10)
 
+        # LINKEN SPALTE (Diagnose & Fahrzeiten)
         col_left = QVBoxLayout()
         col_left.addWidget(self.create_styled_separator("DIAGNOSE E/A"))
         diag_grid = QGridLayout()
@@ -154,13 +160,14 @@ class SettingsWindow(QDialog):
 
         line = QFrame(); line.setFrameShape(QFrame.VLine); line.setStyleSheet("border: 1px solid #444;")
 
+        # RECHTE SPALTE (Wartung & Fehler)
         col_right = QVBoxLayout()
         col_right.addWidget(self.create_styled_separator("WARTUNG"))
         col_right.addLayout(self.create_param_row("Laufzeit Motor (hh:mm)", show_change_btn=False))
         col_right.addLayout(self.create_param_row("Wartung Intervall (hh:mm)", show_change_btn=True))
 
         btn_reset = QPushButton("Motor-Laufzeit zurücksetzen")
-        btn_reset.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin: 10px 0;")
+        btn_reset.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin: 5px 0;")
         btn_reset.clicked.connect(self.secure_reset_motor)
         col_right.addWidget(btn_reset)
 
@@ -170,25 +177,45 @@ class SettingsWindow(QDialog):
         col_right.addWidget(btn_pin)
 
         col_right.addWidget(self.create_styled_separator("FEHLERHISTORIE"))
-        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(250)
+        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(180) # Etwas gekürzt für Button-Platz
         col_right.addWidget(self.log_widget)
 
         btn_clear_log = QPushButton("Fehlerspeicher löschen")
         btn_clear_log.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin-top: 5px;")
         btn_clear_log.clicked.connect(self.secure_clear_logs)
         col_right.addWidget(btn_clear_log)
-
-        btn_exit = QPushButton("Normalbetrieb")
-        btn_exit.setStyleSheet("margin-top: 20px; height: 50px; background-color: #458B00; color: white; font-weight: bold; font-size: 16px;")
-        btn_exit.clicked.connect(self.close)
-        col_right.addWidget(btn_exit)
         col_right.addStretch()
 
         main_layout.addLayout(col_left, 1); main_layout.addWidget(line); main_layout.addLayout(col_right, 1)
-        
         scroll.setWidget(content_widget)
         outer_layout.addWidget(scroll)
+
+        # ====================================================================
+        # NEU: DIE GROSSEN AKTIONSMENÜ-BUTTONS GANZ UNTEN (FEST FIXIERT)
+        # ====================================================================
+        action_button_layout = QHBoxLayout()
+        action_button_layout.setSpacing(15)
+
+        btn_save_close = QPushButton("ÄNDERUNGEN SPEICHERN & SCHLIESSEN")
+        btn_save_close.setStyleSheet("background-color: #458B00; color: white; font-weight: bold; font-size: 16px; height: 55px; border-radius: 6px;")
+        btn_save_close.clicked.connect(self.action_save_and_exit)
+
+        btn_abort = QPushButton("ABBRUCH (VERWERFEN)")
+        btn_abort.setStyleSheet("background-color: #8B1A1A; color: #ffcccc; font-weight: bold; font-size: 16px; height: 55px; border-radius: 6px;")
+        btn_abort.clicked.connect(self.reject) # Verwirft Eingaben und schließt das Fenster
+
+        action_button_layout.addWidget(btn_save_close, stretch=2)
+        action_button_layout.addWidget(btn_abort, stretch=1)
+        outer_layout.addLayout(action_button_layout)
+
         self.refresh_error_list_ui()
+
+    def action_save_and_exit(self):
+        """ Sichert alle geänderten RAM-Werte final in die Einstellungs-JSON """
+        save_settings(self.parent_app.times)
+        QMessageBox.information(self, "System", "Alle Einstellungen wurden permanent gespeichert.")
+        self.accept()
+
     def create_led(self, color):
         led = QLabel(); led.setFixedSize(20, 20)
         led.setStyleSheet("border-radius: 10px; background-color: #006400;")
@@ -257,9 +284,9 @@ class SettingsWindow(QDialog):
                             self.parent_app.times[key] = new_val
                         if key in self.fields:
                             self.fields[key].setText(new_val)
-                        save_settings(self.parent_app.times)
                         
                         if key == "Service-PIN":
+                            save_settings(self.parent_app.times)
                             QMessageBox.information(self, "Hinweis", "PIN wurde geändert. System wird neu initialisiert.")
                             if hasattr(self.parent_app, 'trigger_system_reset'):
                                 self.parent_app.trigger_system_reset()
