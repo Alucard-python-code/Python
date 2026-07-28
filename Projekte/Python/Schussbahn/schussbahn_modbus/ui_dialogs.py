@@ -104,14 +104,18 @@ class SettingsWindow(QDialog):
     def create_param_row(self, key, show_change_btn=True):
         internal_key = key.replace("(hh:mm)", "(min)")
         row = QHBoxLayout()
+        
+        # HIER REFORMIERT: Breite von 200 auf 160 verkleinert (schiebt die IP nach links)
         lbl = QLabel(key)
-        lbl.setFixedWidth(200)
+        lbl.setFixedWidth(160) 
         row.addWidget(lbl)
         
         val = self.parent_app.times.get(internal_key, 0.0)
         display_val = self.format_time(val) if "Laufzeit" in key or "Wartung" in key else str(val)
+        
+        # Das Werte-Label für die IP bekommt dadurch mehr Platz zum Atmen
         val_lbl = QLabel(display_val)
-        val_lbl.setFixedWidth(100)
+        val_lbl.setFixedWidth(120)
         self.fields[key] = val_lbl
         row.addWidget(val_lbl)
         
