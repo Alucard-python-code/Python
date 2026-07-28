@@ -327,7 +327,7 @@ class SettingsWindow(QDialog):
                         if key in self.fields:
                             self.fields[key].setText(new_val)
                         
-                        if key == "Service-PIN" or key == "Modbus-Server IP":
+                        if key == "Service-PIN" or key == "Modbus-IP":
                             save_settings(self.parent_app.times)
                             QMessageBox.information(self, "Hinweis", f"{key} wurde geändert. System wird neu initialisiert.")
                             if hasattr(self.parent_app, 'trigger_system_reset'):
