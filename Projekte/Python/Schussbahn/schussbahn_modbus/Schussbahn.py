@@ -8,7 +8,7 @@ import time
 from PyQt5.QtWidgets import*
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
-from pyModbusTCP.client import ModbusClient
+from pyModbusTCP.client import ModbusClient  # funktioniert nur mit raspi
 
 from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log, save_settings
 from ui_dialogs import SettingsWindow

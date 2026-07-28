@@ -4,7 +4,7 @@ import sys, os, logging, time
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
-from gpiozero import DigitalInputDevice, DigitalOutputDevice
+from gpiozero import DigitalInputDevice, DigitalOutputDevice  # funktionirt nur mit raspi
 from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log
 from ui_dialogs import SettingsWindow
 from drive_worker import DriveThread
