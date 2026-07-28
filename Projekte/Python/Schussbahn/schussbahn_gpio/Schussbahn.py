@@ -78,7 +78,45 @@ class SchussbahnApp(QWidget):
         for btn, row, col in buttons:
             btn.setFont(QFont("Arial", 18, QFont.Bold))
             btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+            
+            # --- FARBSCHEMA AUS VERSION 1 INTEGRIERT ---
+            if btn == self.btn_exit:
+                btn.setStyleSheet("""
+                    QPushButton { 
+                        background-color: #552222; 
+                        color: #ffaaaa; 
+                        border: 1px solid #774444; 
+                        border-radius: 4px; 
+                    }
+                    QPushButton:pressed { 
+                        background-color: #773333; 
+                    }
+                    QPushButton:disabled { 
+                        background-color: #221111; 
+                        color: #553333; 
+                        border: 1px solid #332222; 
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton { 
+                        background-color: #444444; 
+                        color: white; 
+                        border: 1px solid #555555; 
+                        border-radius: 4px; 
+                    }
+                    QPushButton:pressed { 
+                        background-color: #666666; 
+                    }
+                    QPushButton:disabled { 
+                        background-color: #222222; 
+                        color: #666666; 
+                        border: 1px solid #333333; 
+                    }
+                """)
+                
             grid_layout.addWidget(btn, row, col)
+
 
         main_layout.addLayout(grid_layout)
 
@@ -441,7 +479,8 @@ class SchussbahnApp(QWidget):
                 bar_geo = self.track_bar.geometry()
                 target_y = bar_geo.y() + (bar_geo.height() - self.moving_target.height()) // 2
                 self.moving_target.move(bar_geo.x(), target_y)
-        except: pass
+        except:
+            pass
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
