@@ -1,5 +1,6 @@
 #!/bin/python3
 # -*- coding: utf-8 -*-
+import sys
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QFont
@@ -8,7 +9,7 @@ from config_loader import save_settings, load_error_log, save_error_log
 class NumpadDialog(QDialog):
     def __init__(self, parent=None, title="Eingabe", echo_mode=QLineEdit.Normal, allow_dot=True, key_name=""):
         super().__init__(parent)
-        self.setWindowTitle("Eingabe")
+        self.setWindowTitle(title)
         self.setFixedSize(300, 500)
         self.value = ""
 
@@ -21,9 +22,11 @@ class NumpadDialog(QDialog):
         layout.addWidget(self.display)
 
         grid = QGridLayout()
-        buttons = ['7','8','9', '4','5','6', '1','2','3', 'C','0','.']
+        # Das Tastenfeld enthält den Punkt für IP-Adressen
+        buttons = ['7', '8', '9', '4', '5', '6', '1', '2', '3', 'C', '0', '.']
         for i, btn in enumerate(buttons):
-            if btn == '.' and not allow_dot: continue
+            if btn == '.' and not allow_dot:
+                continue
             b = QPushButton(btn)
             b.setFixedSize(60, 50)
             b.clicked.connect(lambda ch, v=btn: self.add_digit(v))
@@ -34,45 +37,43 @@ class NumpadDialog(QDialog):
         btn_save = QPushButton("SPEICHERN")
         btn_save.setStyleSheet("background-color: #28a745; color: white; height: 40px;")
         btn_save.clicked.connect(self.accept)
+        
         btn_cancel = QPushButton("ABBRUCH")
         btn_cancel.setStyleSheet("background-color: #dc3545; color: white; height: 40px;")
         btn_cancel.clicked.connect(self.reject)
+        
         btn_layout.addWidget(btn_save)
         btn_layout.addWidget(btn_cancel)
         layout.addLayout(btn_layout)
         self.setLayout(layout)
 
     def add_digit(self, v):
-        if v == 'C': self.value = ""
-        else: self.value += v
+        if v == 'C':
+            self.value = ""
+        else:
+            self.value += v
         self.display.setText(self.value)
-
 class SettingsWindow(QDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_app = parent
         self.pin_fails = 0
         self.fields = {}
-        self.setWindowTitle("Einstellungen & Diagnose")
+        self.setWindowTitle("Einstellungen & Diagnose (Modbus TCP)")
         
-        # WECHSEL VON FULLSCREEN ZU GEZWUNGENER GRÖSSE (Wayland-Fix):
-        # Wir entfernen die Windows-Ränder...
+        # Kiosk-Modus: Rahmen entfernen & Wayland-Sperre umgehen
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setStyleSheet("background-color: #222; color: white;")
         
         self.init_ui()
         
-        # ...und zwingen das Fenster exakt auf deine Bildschirmgröße!
+        # Festes Layout erzwingen für deine 1024x600 Bildschirmauflösung
         self.setFixedSize(1024, 600)
-        self.move(0, 0) # Positioniert es perfekt in der linken oberen Ecke
+        self.move(0, 0)
 
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_leds)
         self.timer.start(300)
-
-        
-        # Vollbildmodus aktivieren
-        self.showFullScreen()
 
     def format_time(self, minutes):
         h = int(minutes) // 60
@@ -84,12 +85,14 @@ class SettingsWindow(QDialog):
         layout = QHBoxLayout(container)
         layout.setContentsMargins(0, 5, 0, 5)
         layout.setSpacing(10)
+        
         def get_line():
             line = QFrame()
             line.setFrameShape(QFrame.HLine)
             line.setFrameShadow(QFrame.Sunken)
             line.setStyleSheet("color: #FFD700; border: 1px solid #FFD700;")
             return line
+            
         layout.addWidget(get_line())
         lbl = QLabel(text)
         lbl.setStyleSheet("color: #FFD700; font-weight: bold; font-size: 15px;")
@@ -104,62 +107,70 @@ class SettingsWindow(QDialog):
         lbl = QLabel(key)
         lbl.setFixedWidth(200)
         row.addWidget(lbl)
+        
         val = self.parent_app.times.get(internal_key, 0.0)
         display_val = self.format_time(val) if "Laufzeit" in key or "Wartung" in key else str(val)
         val_lbl = QLabel(display_val)
         val_lbl.setFixedWidth(100)
         self.fields[key] = val_lbl
         row.addWidget(val_lbl)
+        
         if show_change_btn:
             btn = QPushButton("Ändern")
             btn.setFixedWidth(80)
             btn.setStyleSheet("background-color: #444444; color: white;")
             btn.clicked.connect(lambda ch, k=internal_key: self.secure_change(k))
             row.addWidget(btn)
+            
         row.addStretch()
         return row
+
     def init_ui(self):
-        # Hauptlayout des Dialogs
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(15, 15, 15, 15)
 
-        # ScrollArea-Definition
+        # ScrollArea für komfortables Wischen
         scroll = QScrollArea(self)
         scroll.setWidgetResizable(True)
-        # Verhindert das Zusammenziehen des Inhalts unter Wayland/X11
         scroll.setStyleSheet("QScrollArea { border: none; background-color: #222; }")
         
-        # Inhalts-Widget, das jetzt die volle Breite erzwingt
         content_widget = QWidget()
         content_widget.setStyleSheet("background-color: #222;")
         
-        # Das Layout wird direkt auf dem content_widget angewendet
         main_layout = QHBoxLayout(content_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(20)
 
-        # LINKE SPALTE
+        # LINKE SPALTE (Modbus Register Diagnose & Zeiten)
         col_left = QVBoxLayout()
-        col_left.addWidget(self.create_styled_separator("DIAGNOSE E/A"))
+        col_left.addWidget(self.create_styled_separator("DIAGNOSE MODBUS REGISTERN"))
         
         diag_grid = QGridLayout()
         in_labels = ["Motorschutz", "Endschalter", "Schütz R", "Schütz L", "Schütz La", "Schütz Sc"]
-        out_labels = ["Rechts", "Links", "Langsam", "Schnell"]
+        out_labels = ["Rechts (C0)", "Links (C1)", "Langsam (C2)", "Schnell (C3)"]
         self.leds = {}
         for i in range(6):
             diag_grid.addWidget(QLabel(in_labels[i]), i, 0)
-            led_c = QWidget(); l_lay = QHBoxLayout(led_c); l_lay.setContentsMargins(5,0,50,0)
+            led_c = QWidget()
+            l_lay = QHBoxLayout(led_c)
+            l_lay.setContentsMargins(5, 0, 50, 0)
             l_lay.setSpacing(0)
             self.leds[f"in_{i}"] = self.create_led("#00FF00")
-            l_lay.addWidget(self.leds[f"in_{i}"]); l_lay.addStretch()
+            l_lay.addWidget(self.leds[f"in_{i}"])
+            l_lay.addStretch()
             diag_grid.addWidget(led_c, i, 1)
+            
             if i < 4:
                 diag_grid.addWidget(QLabel(out_labels[i]), i, 2)
-                led_c_out = QWidget(); lo_lay = QHBoxLayout(led_c_out); lo_lay.setContentsMargins(5,0,50,0)
+                led_c_out = QWidget()
+                lo_lay = QHBoxLayout(led_c_out)
+                lo_lay.setContentsMargins(5, 0, 50, 0)
                 lo_lay.setSpacing(0)
                 self.leds[f"out_{i}"] = self.create_led("#ffa500")
-                lo_lay.addWidget(self.leds[f"out_{i}"]); lo_lay.addStretch()
+                lo_lay.addWidget(self.leds[f"out_{i}"])
+                lo_lay.addStretch()
                 diag_grid.addWidget(led_c_out, i, 3)
+                
         col_left.addLayout(diag_grid)
 
         col_left.addWidget(self.create_styled_separator("FAHRZEITEN"))
@@ -170,12 +181,17 @@ class SettingsWindow(QDialog):
         for key in ["Watchdog Beschuss", "Watchdog Wertung", "Watchdog HomeFahrt"]:
             col_left.addLayout(self.create_param_row(key))
         col_left.addStretch()
-
         # Vertikale Trennlinie
-        line = QFrame(); line.setFrameShape(QFrame.VLine); line.setStyleSheet("color: #444; background-color: #444; width: 2px;")
+        line = QFrame()
+        line.setFrameShape(QFrame.VLine)
+        line.setStyleSheet("color: #444; background-color: #444; width: 2px;")
 
-        # RECHTE SPALTE
+        # RECHTE SPALTE (Netzwerk, Wartung & Protokolle)
         col_right = QVBoxLayout()
+        col_right.addWidget(self.create_styled_separator("NETZWERK & MODBUS KONFIGURATION"))
+        # Hier ist das IP-Einstellungsfeld für die Modbus-Variante eingepflegt
+        col_right.addLayout(self.create_param_row("Modbus-Server IP", show_change_btn=True))
+
         col_right.addWidget(self.create_styled_separator("WARTUNG"))
         col_right.addLayout(self.create_param_row("Laufzeit Motor (hh:mm)", show_change_btn=False))
         col_right.addLayout(self.create_param_row("Wartung Intervall (hh:mm)", show_change_btn=True))
@@ -191,7 +207,8 @@ class SettingsWindow(QDialog):
         col_right.addWidget(btn_pin)
 
         col_right.addWidget(self.create_styled_separator("FEHLERHISTORIE"))
-        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(160)
+        self.log_widget = QListWidget()
+        self.log_widget.setFixedHeight(140)
         col_right.addWidget(self.log_widget)
 
         btn_clear_log = QPushButton("Fehlerspeicher löschen")
@@ -200,7 +217,7 @@ class SettingsWindow(QDialog):
         col_right.addWidget(btn_clear_log)
         col_right.addStretch()
 
-        # Spalten dem Haupt-Layout hinzufügen (Behebt den Breiten-Fehler!)
+        # Spalten dem Layout hinzufügen
         main_layout.addLayout(col_left, 1)
         main_layout.addWidget(line)
         main_layout.addLayout(col_right, 1)
@@ -208,7 +225,7 @@ class SettingsWindow(QDialog):
         scroll.setWidget(content_widget)
         outer_layout.addWidget(scroll)
 
-        # Große Touch-Bedienknöpfe unten am Bildschirmrand (Fest fixiert)
+        # Feste Fußzeile für Speichern und Schließen
         action_button_layout = QHBoxLayout()
         action_button_layout.setSpacing(15)
 
@@ -232,7 +249,8 @@ class SettingsWindow(QDialog):
         self.accept()
 
     def create_led(self, color):
-        led = QLabel(); led.setFixedSize(20, 20)
+        led = QLabel()
+        led.setFixedSize(20, 20)
         led.setStyleSheet("border-radius: 10px; background-color: #006400;")
         led.active_color = color
         return led
@@ -254,7 +272,8 @@ class SettingsWindow(QDialog):
 
     def refresh_error_list_ui(self):
         self.log_widget.clear()
-        for err in load_error_log(): self.log_widget.addItem(err)
+        for err in load_error_log():
+            self.log_widget.addItem(err)
 
     def secure_clear_logs(self):
         pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung Löschen")
@@ -274,7 +293,8 @@ class SettingsWindow(QDialog):
         if pin_dlg.exec_() == QDialog.Accepted:
             if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
                 self.parent_app.times["Laufzeit Motor (min)"] = 0.0
-                if "Laufzeit Motor (hh:mm)" in self.fields: self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
+                if "Laufzeit Motor (hh:mm)" in self.fields:
+                    self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
                 save_settings(self.parent_app.times)
                 QMessageBox.information(self, "Erfolg", "Motor-Laufzeit wurde zurückgesetzt.")
             else:
@@ -283,16 +303,15 @@ class SettingsWindow(QDialog):
     def secure_change(self, key):
         pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung")
         if pin_dlg.exec_() == QDialog.Accepted:
-            # 1. Stufe: Prüfen, ob der eingegebene Service-PIN korrekt ist
             if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
-                val_dlg = NumpadDialog(self, title="Ändern", echo_mode=QLineEdit.Normal, allow_dot=True, key_name=key)
+                # Bei "Modbus-Server IP" erlauben wir Punkte im NumpadDialog
+                allow_dots_in_value = True if "IP" in key else False
+                val_dlg = NumpadDialog(self, title="Ändern", echo_mode=QLineEdit.Normal, allow_dot=allow_dots_in_value, key_name=key)
                 if val_dlg.exec_() == QDialog.Accepted:
                     new_val = val_dlg.value
-                    if not new_val: 
+                    if not new_val:
                         return
-                    
                     try:
-                        # Unterscheidung zwischen Minutenwerten/Intervallen und normalen Texten/Zahlen
                         if "(min)" in key or "Wartung" in key:
                             val_float = float(new_val)
                             self.parent_app.times[key] = val_float
@@ -301,22 +320,16 @@ class SettingsWindow(QDialog):
                                 self.fields[dk].setText(self.format_time(val_float))
                         else:
                             self.parent_app.times[key] = new_val
-                        
                         if key in self.fields:
                             self.fields[key].setText(new_val)
                         
-                        # WICHTIG: Alle geänderten Werte sofort dauerhaft in der JSON-Datei sichern
-                        save_settings(self.parent_app.times)
-                        
-                        # Sonderlogik: Wenn der PIN selbst geändert wurde, System neu starten
-                        if key == "Service-PIN":
-                            QMessageBox.information(self, "Hinweis", "PIN wurde geändert. System wird neu initialisiert.")
+                        if key == "Service-PIN" or key == "Modbus-Server IP":
+                            save_settings(self.parent_app.times)
+                            QMessageBox.information(self, "Hinweis", f"{key} wurde geändert. System wird neu initialisiert.")
                             if hasattr(self.parent_app, 'trigger_system_reset'):
                                 self.parent_app.trigger_system_reset()
                             self.accept()
-                            
                     except ValueError:
                         QMessageBox.critical(self, "Fehler", "Ungültiger Zahlenwert eingegeben!")
             else:
-                # Dieser Block muss sauber eingerückt auf der Ebene der ersten PIN-Abfrage stehen!
                 QMessageBox.warning(self, "Zugriff verweigert", "Falscher Service-PIN!")

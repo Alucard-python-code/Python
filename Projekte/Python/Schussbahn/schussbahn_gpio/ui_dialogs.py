@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/bin/python3
 # -*- coding: utf-8 -*-
 from PyQt5.QtWidgets import *
 from PyQt5.QtCore import Qt, QTimer
@@ -11,15 +11,15 @@ class NumpadDialog(QDialog):
         self.setWindowTitle("Eingabe")
         self.setFixedSize(300, 500)
         self.value = ""
-        
+
         layout = QVBoxLayout()
         layout.addWidget(QLabel(f"Ändere: {key_name}"))
-        
+
         self.display = QLineEdit()
         self.display.setEchoMode(echo_mode)
         self.display.setFixedHeight(40)
         layout.addWidget(self.display)
-        
+
         grid = QGridLayout()
         buttons = ['7','8','9', '4','5','6', '1','2','3', 'C','0','.']
         for i, btn in enumerate(buttons):
@@ -29,7 +29,7 @@ class NumpadDialog(QDialog):
             b.clicked.connect(lambda ch, v=btn: self.add_digit(v))
             grid.addWidget(b, i // 3, i % 3)
         layout.addLayout(grid)
-        
+
         btn_layout = QHBoxLayout()
         btn_save = QPushButton("SPEICHERN")
         btn_save.setStyleSheet("background-color: #28a745; color: white; height: 40px;")
@@ -54,12 +54,25 @@ class SettingsWindow(QDialog):
         self.pin_fails = 0
         self.fields = {}
         self.setWindowTitle("Einstellungen & Diagnose")
-        self.setFixedSize(1000, 950)
+        
+        # WECHSEL VON FULLSCREEN ZU GEZWUNGENER GRÖSSE (Wayland-Fix):
+        # Wir entfernen die Windows-Ränder...
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
         self.setStyleSheet("background-color: #222; color: white;")
+        
         self.init_ui()
+        
+        # ...und zwingen das Fenster exakt auf deine Bildschirmgröße!
+        self.setFixedSize(1024, 600)
+        self.move(0, 0) # Positioniert es perfekt in der linken oberen Ecke
+
         self.timer = QTimer(self)
         self.timer.timeout.connect(self.update_leds)
         self.timer.start(300)
+
+        
+        # Vollbildmodus aktivieren
+        self.showFullScreen()
 
     def format_time(self, minutes):
         h = int(minutes) // 60
@@ -105,13 +118,30 @@ class SettingsWindow(QDialog):
             row.addWidget(btn)
         row.addStretch()
         return row
-
     def init_ui(self):
-        main_layout = QHBoxLayout()
-        main_layout.setContentsMargins(20, 20, 20, 20)
+        # Hauptlayout des Dialogs
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(15, 15, 15, 15)
+
+        # ScrollArea-Definition
+        scroll = QScrollArea(self)
+        scroll.setWidgetResizable(True)
+        # Verhindert das Zusammenziehen des Inhalts unter Wayland/X11
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: #222; }")
         
+        # Inhalts-Widget, das jetzt die volle Breite erzwingt
+        content_widget = QWidget()
+        content_widget.setStyleSheet("background-color: #222;")
+        
+        # Das Layout wird direkt auf dem content_widget angewendet
+        main_layout = QHBoxLayout(content_widget)
+        main_layout.setContentsMargins(10, 10, 10, 10)
+        main_layout.setSpacing(20)
+
+        # LINKE SPALTE
         col_left = QVBoxLayout()
         col_left.addWidget(self.create_styled_separator("DIAGNOSE E/A"))
+        
         diag_grid = QGridLayout()
         in_labels = ["Motorschutz", "Endschalter", "Schütz R", "Schütz L", "Schütz La", "Schütz Sc"]
         out_labels = ["Rechts", "Links", "Langsam", "Schnell"]
@@ -135,45 +165,71 @@ class SettingsWindow(QDialog):
         col_left.addWidget(self.create_styled_separator("FAHRZEITEN"))
         for key in ["Beschuss Schnell", "Beschuss Langsam", "Bremszeit Vorwaerts", "Wertung Schnell", "Bremszeit Rueckwaerts"]:
             col_left.addLayout(self.create_param_row(key))
+            
         col_left.addWidget(self.create_styled_separator("WATCHDOG ÜBERWACHUNG"))
-        for key in ["Watchdog Beschuss", "Watchdog Wertung"]:
+        for key in ["Watchdog Beschuss", "Watchdog Wertung", "Watchdog HomeFahrt"]:
             col_left.addLayout(self.create_param_row(key))
         col_left.addStretch()
 
-        line = QFrame(); line.setFrameShape(QFrame.VLine); line.setStyleSheet("border: 1px solid #444;")
-        
+        # Vertikale Trennlinie
+        line = QFrame(); line.setFrameShape(QFrame.VLine); line.setStyleSheet("color: #444; background-color: #444; width: 2px;")
+
+        # RECHTE SPALTE
         col_right = QVBoxLayout()
         col_right.addWidget(self.create_styled_separator("WARTUNG"))
         col_right.addLayout(self.create_param_row("Laufzeit Motor (hh:mm)", show_change_btn=False))
         col_right.addLayout(self.create_param_row("Wartung Intervall (hh:mm)", show_change_btn=True))
-        
+
         btn_reset = QPushButton("Motor-Laufzeit zurücksetzen")
-        btn_reset.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin: 10px 0;")
+        btn_reset.setStyleSheet("background-color: #E30613; color: white; height: 45px; font-weight: bold; margin: 5px 0; border-radius: 4px;")
         btn_reset.clicked.connect(self.secure_reset_motor)
         col_right.addWidget(btn_reset)
-        
+
         btn_pin = QPushButton("Service PIN ändern")
-        btn_pin.setStyleSheet("background-color: #444444; color: white; height: 40px;")
+        btn_pin.setStyleSheet("background-color: #444444; color: white; height: 45px; font-weight: bold; border-radius: 4px;")
         btn_pin.clicked.connect(lambda: self.secure_change("Service-PIN"))
         col_right.addWidget(btn_pin)
 
         col_right.addWidget(self.create_styled_separator("FEHLERHISTORIE"))
-        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(300)
+        self.log_widget = QListWidget(); self.log_widget.setFixedHeight(160)
         col_right.addWidget(self.log_widget)
 
         btn_clear_log = QPushButton("Fehlerspeicher löschen")
-        btn_clear_log.setStyleSheet("background-color: #E30613; color: white; height: 40px; margin-top: 5px;")
+        btn_clear_log.setStyleSheet("background-color: #E30613; color: white; height: 45px; font-weight: bold; margin-top: 5px; border-radius: 4px;")
         btn_clear_log.clicked.connect(self.secure_clear_logs)
         col_right.addWidget(btn_clear_log)
-
-        btn_exit = QPushButton("Normalbetrieb")
-        btn_exit.setStyleSheet("margin-top: 20px; height: 50px; background-color: #458B00; color: white; font-weight: bold; font-size: 16px;")
-        btn_exit.clicked.connect(self.close)
-        col_right.addWidget(btn_exit)
         col_right.addStretch()
 
-        main_layout.addLayout(col_left, 1); main_layout.addWidget(line); main_layout.addLayout(col_right, 1)
-        self.setLayout(main_layout); self.refresh_error_list_ui()
+        # Spalten dem Haupt-Layout hinzufügen (Behebt den Breiten-Fehler!)
+        main_layout.addLayout(col_left, 1)
+        main_layout.addWidget(line)
+        main_layout.addLayout(col_right, 1)
+        
+        scroll.setWidget(content_widget)
+        outer_layout.addWidget(scroll)
+
+        # Große Touch-Bedienknöpfe unten am Bildschirmrand (Fest fixiert)
+        action_button_layout = QHBoxLayout()
+        action_button_layout.setSpacing(15)
+
+        btn_save_close = QPushButton("ÄNDERUNGEN SPEICHERN & SCHLIESSEN")
+        btn_save_close.setStyleSheet("background-color: #458B00; color: white; font-weight: bold; font-size: 16px; height: 55px; border-radius: 6px;")
+        btn_save_close.clicked.connect(self.action_save_and_exit)
+
+        btn_abort = QPushButton("ABBRUCH")
+        btn_abort.setStyleSheet("background-color: #8B1A1A; color: #ffcccc; font-weight: bold; font-size: 16px; height: 55px; border-radius: 6px;")
+        btn_abort.clicked.connect(self.reject)
+
+        action_button_layout.addWidget(btn_save_close, stretch=2)
+        action_button_layout.addWidget(btn_abort, stretch=1)
+        outer_layout.addLayout(action_button_layout)
+
+        self.refresh_error_list_ui()
+
+    def action_save_and_exit(self):
+        save_settings(self.parent_app.times)
+        QMessageBox.information(self, "System", "Alle Einstellungen wurden permanent gespeichert.")
+        self.accept()
 
     def create_led(self, color):
         led = QLabel(); led.setFixedSize(20, 20)
@@ -220,16 +276,23 @@ class SettingsWindow(QDialog):
                 self.parent_app.times["Laufzeit Motor (min)"] = 0.0
                 if "Laufzeit Motor (hh:mm)" in self.fields: self.fields["Laufzeit Motor (hh:mm)"].setText("00:00")
                 save_settings(self.parent_app.times)
+                QMessageBox.information(self, "Erfolg", "Motor-Laufzeit wurde zurückgesetzt.")
+            else:
+                QMessageBox.warning(self, "Fehler", "Falscher PIN!")
 
     def secure_change(self, key):
         pin_dlg = NumpadDialog(self, title="Sicherheit", echo_mode=QLineEdit.Password, allow_dot=False, key_name="Autorisierung")
         if pin_dlg.exec_() == QDialog.Accepted:
+            # 1. Stufe: Prüfen, ob der eingegebene Service-PIN korrekt ist
             if pin_dlg.value == str(self.parent_app.times.get("Service-PIN", 1234)):
                 val_dlg = NumpadDialog(self, title="Ändern", echo_mode=QLineEdit.Normal, allow_dot=True, key_name=key)
                 if val_dlg.exec_() == QDialog.Accepted:
                     new_val = val_dlg.value
-                    if not new_val: return
+                    if not new_val: 
+                        return
+                    
                     try:
+                        # Unterscheidung zwischen Minutenwerten/Intervallen und normalen Texten/Zahlen
                         if "(min)" in key or "Wartung" in key:
                             val_float = float(new_val)
                             self.parent_app.times[key] = val_float
@@ -238,16 +301,22 @@ class SettingsWindow(QDialog):
                                 self.fields[dk].setText(self.format_time(val_float))
                         else:
                             self.parent_app.times[key] = new_val
-                            if key in self.fields:
-                                self.fields[key].setText(new_val)
+                        
+                        if key in self.fields:
+                            self.fields[key].setText(new_val)
+                        
+                        # WICHTIG: Alle geänderten Werte sofort dauerhaft in der JSON-Datei sichern
                         save_settings(self.parent_app.times)
-                        # Automatischer System-Reset bei PIN-Änderung zur Übernahme
+                        
+                        # Sonderlogik: Wenn der PIN selbst geändert wurde, System neu starten
                         if key == "Service-PIN":
                             QMessageBox.information(self, "Hinweis", "PIN wurde geändert. System wird neu initialisiert.")
                             if hasattr(self.parent_app, 'trigger_system_reset'):
                                 self.parent_app.trigger_system_reset()
                             self.accept()
+                            
                     except ValueError:
                         QMessageBox.critical(self, "Fehler", "Ungültiger Zahlenwert eingegeben!")
             else:
+                # Dieser Block muss sauber eingerückt auf der Ebene der ersten PIN-Abfrage stehen!
                 QMessageBox.warning(self, "Zugriff verweigert", "Falscher Service-PIN!")
