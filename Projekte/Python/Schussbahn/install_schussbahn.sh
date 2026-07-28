@@ -5,7 +5,7 @@
 # ====================================================================
 
 # HIER DEINE GITHUB-DATEN EINTRAGEN
-GITHUB_REPO_URL="https://github.com"
+GITHUB_REPO_URL="https://github.com/Alucard-python-code/Python.git"
 GITHUB_BRANCH="main" # oder "master"
 
 # 1. Root-Check & Ermittlung des echten Benutzers
