@@ -124,6 +124,10 @@ class SchussbahnApp(QWidget):
         self.track_bar.setRange(0, 100)
         self.track_bar.setValue(0)
         self.track_bar.setTextVisible(False)
+        self.track_bar.setStyleSheet("""
+        QProgressBar { background-color: #252525; border-radius: 4px; border: 1px solid #444444; }
+        QProgressBar::chunk { background-color: #113322; border-radius: 3px; } 
+        """)
         main_layout.addWidget(self.track_bar)
 
         self.moving_target = QLabel("🎯", self)
