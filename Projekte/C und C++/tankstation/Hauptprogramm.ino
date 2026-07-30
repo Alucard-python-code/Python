@@ -1,6 +1,7 @@
 #include <Arduino.h>
 #include <SPI.h>
 #include <Wire.h>
+#include <SD.h>                // Standard Arduino SD-Bibliothek
 #include <Arduino_Modulino.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
@@ -10,21 +11,20 @@
 #include "DisplayHelpers.h"
 #include "Menus.h"
 
-// Globale Instanzen für Display
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
 
-// Modulino-Instanzen unter Verwendung der Adressen aus der Configuration.h
 ModulinoRelay relaisTanken(ADRESSE_RELAIS_TANKEN);    
 ModulinoRelay relaisLeeren(ADRESSE_RELAIS_LEEREN);
 ModulinoKnob encoderModulino(ADRESSE_ENCODER_KNOB); 
 
-// Statemachine & Variablen Definitionen
 MenuState currentState = SPLASH;
 MenuState nextStateAfterKeyboard = HAUPTMENU; 
 unsigned long stateTimer = 0;
 
+// Kalibrierdaten Variablen
 uint16_t impulseProLiter = 200;
 float druckNullpunktSpannung = 0.5; 
+char systemPin[6] = "0000";
 
 Benutzer user;
 Modell modelle[10];
@@ -36,12 +36,91 @@ float getankteMengeMl = 0.0;
 float durchflussMlMin = 0.0;
 unsigned long lastFlowCalcTime = 0;
 
-char keyboardBuffer[32] = "";
+char keyboardBuffer[20] = "";
 int keyboardMaxLen = 15;
 int kbRow = 0, kbCol = 0;
 char* targetStringPointer = nullptr;
 
 void flowSensorISR() { flowImpulse++; }
+
+// =========================================================================
+// SD-KARTEN DATENMANAGEMENT (LESEN & SCHREIBEN)
+// =========================================================================
+void saveCalibrationToSD() {
+    SD.remove("calib.txt");
+    File file = SD.open("calib.txt", FILE_WRITE);
+    if (file) {
+        file.print(impulseProLiter); file.print(",");
+        file.println(druckNullpunktSpannung, 4);
+        file.close();
+    }
+}
+
+void loadCalibrationFromSD() {
+    File file = SD.open("calib.txt");
+    if (file) {
+        impulseProLiter = file.parseInt();
+        druckNullpunktSpannung = file.parseFloat();
+        file.close();
+    }
+}
+
+void savePinToSD() {
+    SD.remove("pin.txt");
+    File file = SD.open("pin.txt", FILE_WRITE);
+    if (file) {
+        file.println(systemPin);
+        file.close();
+    }
+}
+
+void loadPinFromSD() {
+    File file = SD.open("pin.txt");
+    if (file) {
+        int i = 0;
+        while (file.available() && i < 5) {
+            char c = file.read();
+            if (c == '\n' || c == '\r') break;
+            systemPin[i++] = c;
+        }
+        systemPin[i] = '\0';
+        file.close();
+    }
+}
+
+void saveModelleToSD() {
+    SD.remove("modelle.txt");
+    File file = SD.open("modelle.txt", FILE_WRITE);
+    if (file) {
+        for (int i = 0; i < 10; i++) {
+            file.print(modelle[i].name); file.print(",");
+            file.print(modelle[i].tankvolumenMl); file.print(",");
+            file.print(modelle[i].maxDruckMbar); file.print(",");
+            file.println(modelle[i].istBeutel ? "1" : "0");
+        }
+        file.close();
+    }
+}
+
+void loadModelleFromSD() {
+    File file = SD.open("modelle.txt");
+    if (file) {
+        for (int i = 0; i < 10; i++) {
+            if (!file.available()) break;
+            int bufferIdx = 0;
+            while (file.available()) {
+                char c = file.read();
+                if (c == ',') break;
+                if (bufferIdx < 15) modelle[i].name[bufferIdx++] = c;
+            }
+            modelle[i].name[bufferIdx] = '\0';
+            modelle[i].tankvolumenMl = file.parseInt();
+            modelle[i].maxDruckMbar = file.parseInt();
+            modelle[i].istBeutel = (file.parseInt() == 1);
+        }
+        file.close();
+    }
+}
 
 void checkGlobalAbbruch() {
     if (encoderModulino.isPressed()) {
@@ -61,13 +140,10 @@ void checkGlobalAbbruch() {
 
 void setup() {
     Serial.begin(115200);
-    
-    // I2C-Bus und Module starten
     Modulino.begin();
     relaisTanken.begin();
     relaisLeeren.begin();
     encoderModulino.begin();
-    
     setMotor(0, true);
 
     pinMode(PIN_DISPLAY_CS, OUTPUT);
@@ -83,19 +159,33 @@ void setup() {
 
     tft.begin();
     tft.setRotation(1);
-    
-    // Demodaten befüllen
-    strcpy(user.vorname, "Max");
-    strcpy(user.nachname, "Mustermann");
-    strcpy(user.plz, "97070");
-    strcpy(user.wohnort, "Wuerzburg");
-    
-    for(int i=0; i<10; i++) {
-        sprintf(modelle[i].name, "Modell %d", i+1);
-        modelle[i].tankvolumenMl = 1000 + (i * 500);
-        modelle[i].maxDruckMbar = 120 + (i * 10);
-        modelle[i].istBeutel = (i % 2 == 0);
+
+    // Initialisierung des SD-Kartenlesers
+    if (!SD.begin(PIN_SD_CS)) {
+        tft.fillScreen(ILI9341_RED);
+        tft.setCursor(20, 100); tft.setTextSize(2);
+        tft.print("SD-Karte fehlt/defekt!");
+        delay(4000);
+    } else {
+        // Bei erfolgreichem Mounten: Daten laden
+        loadCalibrationFromSD();
+        loadPinFromSD();
+        loadModelleFromSD();
     }
+    
+    // Fallback-Dummys falls SD-Karte leer war
+    if (modelle[0].tankvolumenMl <= 0) {
+        for(int i=0; i<10; i++) {
+            sprintf(modelle[i].name, "Modell %d", i+1);
+            modelle[i].tankvolumenMl = 1000 + (i * 500);
+            modelle[i].maxDruckMbar = 120 + (i * 10);
+            modelle[i].istBeutel = (i % 2 == 0);
+        }
+        saveModelleToSD();
+    }
+
+    strcpy(user.vorname, "Max"); // Basis-Benutzerdaten
+    strcpy(user.nachname, "Mustermann");
 
     currentState = SPLASH;
     stateTimer = millis();
@@ -106,9 +196,7 @@ void loop() {
     checkGlobalAbbruch();
 
     bool click = encoderModulino.isPressed();
-    if (click) {
-        delay(200); 
-    }
+    if (click) { delay(200); }
 
     switch (currentState) {
         case SPLASH:
@@ -213,22 +301,40 @@ void loop() {
 
         case KALIBRIERUNG_FLOW:
             drawHeader("FLOW KALIBRIERUNG");
+            
+            // Wenn der Modulino-Encoder-Knopf gedrückt wird, startet der Pumpvorgang
             if (encoderModulino.isPressed()) {
-                flowImpulse = 0;
-                while (encoderModulino.isPressed()) setMotor(50, true);
+                flowImpulse = 0; // Impulszähler für die Neumessung auf 0 setzen
+                
+                // Solange der Knopf physisch gedrückt gehalten wird, läuft die Pumpe
+                while (encoderModulino.isPressed()) {
+                    setMotor(50, true); // Pumpe läuft vorwärts mit 50% Leistung
+                }
+                
+                // Sobald der Knopf losgelassen wird, stoppt das System sofort
                 setMotor(0, true);
+                
+                // Die während des Drückens gezählten Impulse als neuen Liter-Referenzwert sichern
                 impulseProLiter = flowImpulse;
+                
+                // Neuen Kalibrierwert direkt als "calib.txt" auf die SD-Karte schreiben
+                saveCalibrationToSD(); 
+                
+                // Zurück ins Hauptmenü springen und den Encoder-Wert für die Navigation nullen
                 currentState = HAUPTMENU;
                 encoderModulino.set(0);
             }
             break;
 
         case TASTATUR_INPUT:
+            // Ruft die Auswertungs-Logik der virtuellen Tastatur aus der "Menus.h" auf
             handleTastaturInput(click);
             break;
 
         default:
+            // Sicherheitsnetz: Sollte die State-Machine in einen unbekannten Zustand geraten,
+            // wird der Benutzer automatisch und sicher zum Hauptmenü zurückgeleitet.
             currentState = HAUPTMENU;
             break;
-    }
-}
+    } // Ende von: switch (currentState)
+} // Ende von: void loop()
