@@ -12,19 +12,16 @@
 #include "HardwareControl.h"
 #include "SD_Storage.h"
 
-// Definition der globalen Hardware-Objekte
 extern Adafruit_ILI9341 tft;
 extern ModulinoRelay relaisTanken;
 extern ModulinoRelay relaisLeeren;
 extern ModulinoKnob encoderModulino;
 
-// Statusvariablen
 extern MenuState currentState;
 extern MenuState nextStateAfterKeyboard;
 extern unsigned long stateTimer;
 extern unsigned long leckageTimer;
 
-// Werte-Variablen
 extern uint16_t impulseProLiter;
 extern float druckNullpunktSpannung;
 extern char systemPin[];

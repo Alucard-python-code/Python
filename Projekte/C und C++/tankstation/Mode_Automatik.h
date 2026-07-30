@@ -27,7 +27,10 @@ inline void handleAutomatikSelect(bool click) {
     static int lastSel = -1;
     if (sel != lastSel) {
         drawHeader("MODELL WAHL");
-        tft.setTextSize(2); tft.setCursor(20, 50); tft.print("Name: "); tft.print(modelle[sel].name);
+        tft.setTextSize(2); tft.setTextColor(ILI9341_WHITE);
+        tft.setCursor(20, 50);  tft.print("Modell-Slot: ["); tft.print(sel + 1); tft.print("/10]");
+        tft.setCursor(20, 90);  tft.print("Name: "); tft.print(modelle[sel].name);
+        tft.setCursor(20, 130); tft.print("Limit: "); tft.print(modelle[sel].tankvolumenMl); tft.print(" ml");
         lastSel = sel;
     }
     if (click) { 
@@ -36,6 +39,7 @@ inline void handleAutomatikSelect(bool click) {
         stateTimer = millis(); 
         leckageTimer = millis(); 
         currentState = AUTOMATIK_RUN; 
+        lastSel = -1;
     }
 }
 

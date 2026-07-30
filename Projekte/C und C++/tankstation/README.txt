@@ -103,7 +103,13 @@ Hinweis: Der Zugang zu den Einstellungen ist über eine PIN-Abfrage geschützt.
 1. Wählen Sie im Hauptmenü "4. Modellspeicher".
 2. Das Display listet alle hinterlegten Modelle in einer übersichtlichen Tabelle 
    mit Name, Tankvolumen, maximal zulässigem Druck und Tank-Typ auf.
-3. Ein einfacher Klick bringt Sie jederzeit zurück ins Hauptmenü.
+3. Um unbeabsichtigtes Verlassen beim Betrachten der Einträge zu verhindern, 
+   wird die Navigation rein über die Liste gesteuert:
+   * Scrollen Sie mit dem Drehencoder ganz nach unten über den letzten 
+     Tabelleneintrag hinaus.
+   * Aktivieren Sie dort den dedizierten Button "--> ZURÜCK ZUM HAUPTMENÜ".
+   * Bestätigen Sie das Feld mit einem Klick auf den Encoder, um sicher in das 
+     Hauptmenü zurückzukehren.
 
 --------------------------------------------------------------------------------
 6. WICHTIGE HARDWARE- & SICHERHEITSHINWEISE
@@ -111,11 +117,8 @@ Hinweis: Der Zugang zu den Einstellungen ist über eine PIN-Abfrage geschützt.
 * NOT-AUS-FUNKTION: Ein langer Druck (über 1,5 Sekunden) auf den Encoder bricht 
   jeden laufenden Tankvorgang in jedem Menü sofort ab, stoppt den Motor, 
   schaltet alle Relais aus und wirft Sie zurück ins Hauptmenü!
-* SD-KARTEN-FORMAT: Die SD-Karte muss im Format FAT16 oder FAT32 formatiert 
-  sein. Das modernere exFAT-Format wird nicht unterstützt.
-* GEMEINSAME MASSE (GND): Achten Sie darauf, dass die Masse (GND) des Pumpen-Akkus 
-  zwingend mit dem GND-Pin des Arduinos verbunden ist, da es andernfalls zu 
-  gefährlichen Fehlmessungen des Drucksensors kommt.
+* SD-KARTEN-FORMAT: Die SD-Karte muss im Format FAT16 oder FAT32 formatiert sein.
+  Das modernere exFAT-Format wird nicht unterstützt.
 
 --------------------------------------------------------------------------------
 7. GEWÄHRLEISTUNG & GARANTIEBEDINGUNGEN
