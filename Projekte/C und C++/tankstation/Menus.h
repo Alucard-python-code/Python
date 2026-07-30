@@ -1,17 +1,18 @@
 #pragma once
 #include <Adafruit_GFX.h>
 #include <Adafruit_ILI9341.h>
+#include <Arduino_Modulino.h>
 #include "Configuration.h"
 #include "DisplayHelpers.h"
 
 extern Adafruit_ILI9341 tft;
+extern ModulinoKnob encoderModulino;
 extern char keyboardBuffer[16];
 extern int keyboardMaxLen;
 extern int kbRow, kbCol;
 extern char* targetStringPointer;
 extern MenuState currentState;
 extern MenuState nextStateAfterKeyboard;
-extern volatile int encoderPos;
 
 const char* tastaturLayout[] = {
     "ABCDEFGHIJKLM",
@@ -19,12 +20,12 @@ const char* tastaturLayout[] = {
     "abcdefghijklm",
     "nopqrstuvwxyz",
     "0123456789_ ",
-    " <L    =OK   " // <L = Löschen, =OK = Bestätigen
+    " <L    =OK   "
 };
 
 inline void handleTastaturInput(bool click) {
     int gesamtZeichen = 13 * 5 + 2; 
-    int index = abs(encoderPos) % gesamtZeichen;
+    int index = abs(encoderModulino.get()) % gesamtZeichen;
     
     if (index < 65) {
         kbRow = index / 13;
@@ -79,7 +80,7 @@ inline void handleTastaturInput(bool click) {
             } else { 
                 strcpy(targetStringPointer, keyboardBuffer);
                 currentState = nextStateAfterKeyboard;
-                encoderPos = 0;
+                encoderModulino.set(0);
             }
         }
         lastIndex = -1; 

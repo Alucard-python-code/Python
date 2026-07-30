@@ -3,9 +3,10 @@
 #include <Arduino_Modulino.h>
 #include "Configuration.h"
 
-// Externe Variablen, die in der Hauptdatei definiert sind
 extern ModulinoRelay relaisTanken;
 extern ModulinoRelay relaisLeeren;
+extern ModulinoKnob encoderModulino; // Modulino Encoder Instanz
+
 extern volatile unsigned long flowImpulse;
 extern uint16_t impulseProLiter;
 extern float druckNullpunktSpannung;
@@ -15,7 +16,6 @@ extern float getankteMengeMl;
 extern float durchflussMlMin;
 extern unsigned long lastFlowCalcTime;
 
-// Smart-Motor und I2C-Relaissteuerung
 inline void setMotor(int speedPercent, bool vorwaerts) {
     if (speedPercent == 0) {
         analogWrite(PIN_H_BRUECKE_ENA, 0);
@@ -42,7 +42,6 @@ inline void setMotor(int speedPercent, bool vorwaerts) {
     }
 }
 
-// Sensorwerte im Hintergrund verarbeiten
 inline void updateSensors() {
     int adcRaw = analogRead(PIN_DRUCK_SENSOR);
     float spannung = (adcRaw * 5.0) / 1023.0;

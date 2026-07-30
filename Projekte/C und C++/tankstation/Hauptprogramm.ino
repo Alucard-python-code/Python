@@ -10,10 +10,12 @@
 #include "DisplayHelpers.h"
 #include "Menus.h"
 
-// Globale Instanzen
+// Globale Instanzen für Display und Modulinos
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
+
 ModulinoRelay relaisTanken(ADDRESS_DEFAULT);    
 ModulinoRelay relaisLeeren(ADDRESS_ALTERNATIVE);
+ModulinoKnob encoderModulino(ADDRESS_DEFAULT); // Der I2C-Encoder nutzt die Standardadresse
 
 // Statemachine & Variablen Definitionen
 MenuState currentState = SPLASH;
@@ -33,34 +35,23 @@ float getankteMengeMl = 0.0;
 float durchflussMlMin = 0.0;
 unsigned long lastFlowCalcTime = 0;
 
-volatile int encoderPos = 0;
-volatile bool encoderBtnPressed = false;
-
 char keyboardBuffer[16] = "";
 int keyboardMaxLen = 15;
 int kbRow = 0, kbCol = 0;
 char* targetStringPointer = nullptr;
 
-// Interrupt Service Routinen
+// Interrupt Service Routine NUR noch für den Durchflusssensor
 void flowSensorISR() { flowImpulse++; }
-void encoderISR() {
-    static unsigned long lastInterruptTime = 0;
-    unsigned long interruptTime = millis();
-    if (interruptTime - lastInterruptTime > 5) {
-        if (digitalRead(PIN_ENC_B) == digitalRead(PIN_ENC_A)) encoderPos++;
-        else encoderPos--;
-        lastInterruptTime = interruptTime;
-    }
-}
 
 void checkGlobalAbbruch() {
-    if (digitalRead(PIN_ENC_BTN) == LOW) {
+    // Abfrage des langen Tastendrucks direkt über das I2C-Encoder-Modul
+    if (encoderModulino.isPressed()) {
         unsigned long pressTime = millis();
-        while (digitalRead(PIN_ENC_BTN) == LOW) {
+        while (encoderModulino.isPressed()) {
             if (millis() - pressTime > 1500) {
                 setMotor(0, true);
                 currentState = HAUPTMENU;
-                encoderPos = 0;
+                encoderModulino.set(0);
                 tft.fillScreen(ILI9341_BLACK);
                 delay(500);
                 break;
@@ -71,9 +62,13 @@ void checkGlobalAbbruch() {
 
 void setup() {
     Serial.begin(115200);
+    
+    // I2C-Bus starten und alle drei Modulino-Module aufwecken
     Modulino.begin();
     relaisTanken.begin();
     relaisLeeren.begin();
+    encoderModulino.begin();
+    
     setMotor(0, true);
 
     pinMode(PIN_DISPLAY_CS, OUTPUT);
@@ -81,12 +76,12 @@ void setup() {
     pinMode(PIN_DISPLAY_RST, OUTPUT);
     pinMode(PIN_DRUCK_SENSOR, INPUT);
     pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
-    pinMode(PIN_ENC_A, INPUT_PULLUP);
-    pinMode(PIN_ENC_B, INPUT_PULLUP);
-    pinMode(PIN_ENC_BTN, INPUT_PULLUP);
+    pinMode(PIN_H_BRUECKE_ENA, OUTPUT);
+    pinMode(PIN_H_BRUECKE_IN1, OUTPUT);
+    pinMode(PIN_H_BRUECKE_IN2, OUTPUT);
 
+    // Einziger verbleibender Hardware-Interrupt für die Durchflussmessung
     attachInterrupt(digitalPinToInterrupt(PIN_FLOW_SENSOR), flowSensorISR, RISING);
-    attachInterrupt(digitalPinToInterrupt(PIN_ENC_A), encoderISR, CHANGE);
 
     tft.begin();
     tft.setRotation(1);
@@ -112,11 +107,11 @@ void loop() {
     updateSensors();
     checkGlobalAbbruch();
 
-    bool click = false;
-    if (digitalRead(PIN_ENC_BTN) == LOW && !encoderBtnPressed) {
-        delay(40);
-        if (digitalRead(PIN_ENC_BTN) == LOW) { click = true; encoderBtnPressed = true; }
-    } else if (digitalRead(PIN_ENC_BTN) == HIGH) { encoderBtnPressed = false; }
+    // Klick-Erkennung über das Modulino I2C-Modul
+    bool click = encoderModulino.isPressed();
+    if (click) {
+        delay(200); // Einfaches Entprellen für den I2C-Bus
+    }
 
     switch (currentState) {
         case SPLASH:
@@ -125,13 +120,14 @@ void loop() {
             tft.setCursor(30, 30); tft.print("TANKSTATION BEREIT");
             tft.setTextColor(ILI9341_WHITE); tft.setTextSize(1);
             tft.setCursor(30, 80); tft.print("Pilot: "); tft.print(user.vorname);
-            delay(3000); // Zur Demonstration gekürzt
+            delay(3000); 
             currentState = HAUPTMENU;
+            encoderModulino.set(0);
             break;
 
         case HAUPTMENU: {
             static int lastSel = -1;
-            int sel = abs(encoderPos) % 4;
+            int sel = abs(encoderModulino.get()) % 4;
             if (sel != lastSel) {
                 drawHeader("HAUPTMENU");
                 const char* items[] = {"1. Automatik Modus", "2. Manueller Modus", "3. Einstellungen", "4. Modellspeicher"};
@@ -143,7 +139,7 @@ void loop() {
                 lastSel = sel;
             }
             if (click) {
-                lastSel = -1; encoderPos = 0;
+                lastSel = -1; encoderModulino.set(0);
                 if (sel == 0) currentState = AUTOMATIK_SELECT;
                 if (sel == 1) currentState = MANUELL;
                 if (sel == 2) currentState = PIN_PRUEFUNG;
@@ -153,7 +149,7 @@ void loop() {
         }
 
         case AUTOMATIK_SELECT: {
-            int sel = abs(encoderPos) % 10;
+            int sel = abs(encoderModulino.get()) % 10;
             static int lastSel = -1;
             if (sel != lastSel) {
                 drawHeader("MODELL WAHL");
@@ -183,6 +179,7 @@ void loop() {
                 tft.setCursor(30, 100); tft.print("Betanken beendet!");
                 delay(3000);
                 currentState = HAUPTMENU;
+                encoderModulino.set(0);
                 break;
             }
 
@@ -195,7 +192,7 @@ void loop() {
         }
 
         case MANUELL: {
-            int speed = constrain(encoderPos * 5, -100, 100);
+            int speed = constrain(encoderModulino.get() * 5, -100, 100);
             static int lastSpeed = -999;
             if (speed != lastSpeed) {
                 drawHeader("MANUELLER MODUS");
@@ -204,26 +201,28 @@ void loop() {
                 else { tft.print("LEEREN"); setMotor(abs(speed), false); }
                 lastSpeed = speed;
             }
-            if (click && speed == 0) { currentState = HAUPTMENU; encoderPos = 0; }
+            if (click && speed == 0) { currentState = HAUPTMENU; encoderModulino.set(0); }
             break;
         }
 
         case PIN_PRUEFUNG:
             currentState = EINSTELLUNGEN;
+            encoderModulino.set(0);
             break;
 
         case EINSTELLUNGEN:
-            currentState = KALIBRIERUNG_FLOW; // Shortcut für Demozwecke
+            currentState = KALIBRIERUNG_FLOW; 
             break;
 
         case KALIBRIERUNG_FLOW:
             drawHeader("FLOW KALIBRIERUNG");
-            if (digitalRead(PIN_ENC_BTN) == LOW) {
+            if (encoderModulino.isPressed()) {
                 flowImpulse = 0;
-                while (digitalRead(PIN_ENC_BTN) == LOW) setMotor(50, true);
+                while (encoderModulino.isPressed()) setMotor(50, true);
                 setMotor(0, true);
                 impulseProLiter = flowImpulse;
                 currentState = HAUPTMENU;
+                encoderModulino.set(0);
             }
             break;
 

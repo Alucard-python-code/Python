@@ -2,7 +2,7 @@
 #include <Arduino.h>
 
 // =========================================================================
-// PIN-ZUORDNUNG
+// PIN-ZUORDNUNG (NUR NOCH FÜR DISPLAY UND H-BRÜCKE)
 // =========================================================================
 #define PIN_DISPLAY_CS   10
 #define PIN_DISPLAY_DC   9
@@ -11,11 +11,7 @@
 #define PIN_SD_CS        6
 
 #define PIN_DRUCK_SENSOR A0
-#define PIN_FLOW_SENSOR  2   // Muss ein Interrupt-Pin sein!
-
-#define PIN_ENC_A        3   // Interrupt-Pin
-#define PIN_ENC_B        4
-#define PIN_ENC_BTN      5
+#define PIN_FLOW_SENSOR  2   // Bleibt als direkter Hardware-Interrupt-Pin
 
 #define PIN_H_BRUECKE_ENA 11  // PWM-fähig
 #define PIN_H_BRUECKE_IN1 12
@@ -35,9 +31,9 @@ struct Benutzer {
     char vorname[16];
     char nachname[16];
     char plz[8];
-    char wohnort[20];
-    char strasse[25];
-    char hausnummer[8];
+    char wohnort[16];
+    char strasse[20];
+    char hausnummer[6];
 };
 
 enum MenuState {
