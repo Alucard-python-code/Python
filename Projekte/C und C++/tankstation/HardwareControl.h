@@ -5,7 +5,7 @@
 
 extern ModulinoRelay relaisTanken;
 extern ModulinoRelay relaisLeeren;
-extern ModulinoKnob encoderModulino; // Modulino Encoder Instanz
+extern ModulinoKnob encoderModulino;
 
 extern volatile unsigned long flowImpulse;
 extern uint16_t impulseProLiter;

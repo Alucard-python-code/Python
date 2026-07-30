@@ -8,7 +8,7 @@ extern Adafruit_ILI9341 tft;
 extern ModulinoKnob encoderModulino;
 extern MenuState currentState;
 extern MenuState nextStateAfterKeyboard;
-extern char keyboardBuffer[16];
+extern char keyboardBuffer[32];
 extern int keyboardMaxLen;
 extern int kbRow, kbCol;
 extern char* targetStringPointer;
@@ -33,7 +33,7 @@ inline void openKeyboard(char* target, int maxLen, MenuState nextState) {
     nextStateAfterKeyboard = nextState;
     strcpy(keyboardBuffer, target);
     kbRow = 0; kbCol = 0;
-    encoderModulino.set(0); // I2C-Encoder-Wert nullen
+    encoderModulino.set(0); 
     currentState = TASTATUR_INPUT;
     tft.fillScreen(ILI9341_BLACK);
 }

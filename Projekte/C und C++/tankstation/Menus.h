@@ -7,7 +7,7 @@
 
 extern Adafruit_ILI9341 tft;
 extern ModulinoKnob encoderModulino;
-extern char keyboardBuffer[16];
+extern char keyboardBuffer[32];
 extern int keyboardMaxLen;
 extern int kbRow, kbCol;
 extern char* targetStringPointer;

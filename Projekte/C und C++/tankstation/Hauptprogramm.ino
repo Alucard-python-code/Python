@@ -10,12 +10,13 @@
 #include "DisplayHelpers.h"
 #include "Menus.h"
 
-// Globale Instanzen für Display und Modulinos
+// Globale Instanzen für Display
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
 
-ModulinoRelay relaisTanken(ADDRESS_DEFAULT);    
-ModulinoRelay relaisLeeren(ADDRESS_ALTERNATIVE);
-ModulinoKnob encoderModulino(ADDRESS_DEFAULT); // Der I2C-Encoder nutzt die Standardadresse
+// Modulino-Instanzen unter Verwendung der Adressen aus der Configuration.h
+ModulinoRelay relaisTanken(ADRESSE_RELAIS_TANKEN);    
+ModulinoRelay relaisLeeren(ADRESSE_RELAIS_LEEREN);
+ModulinoKnob encoderModulino(ADRESSE_ENCODER_KNOB); 
 
 // Statemachine & Variablen Definitionen
 MenuState currentState = SPLASH;
@@ -35,16 +36,14 @@ float getankteMengeMl = 0.0;
 float durchflussMlMin = 0.0;
 unsigned long lastFlowCalcTime = 0;
 
-char keyboardBuffer[16] = "";
+char keyboardBuffer[32] = "";
 int keyboardMaxLen = 15;
 int kbRow = 0, kbCol = 0;
 char* targetStringPointer = nullptr;
 
-// Interrupt Service Routine NUR noch für den Durchflusssensor
 void flowSensorISR() { flowImpulse++; }
 
 void checkGlobalAbbruch() {
-    // Abfrage des langen Tastendrucks direkt über das I2C-Encoder-Modul
     if (encoderModulino.isPressed()) {
         unsigned long pressTime = millis();
         while (encoderModulino.isPressed()) {
@@ -63,7 +62,7 @@ void checkGlobalAbbruch() {
 void setup() {
     Serial.begin(115200);
     
-    // I2C-Bus starten und alle drei Modulino-Module aufwecken
+    // I2C-Bus und Module starten
     Modulino.begin();
     relaisTanken.begin();
     relaisLeeren.begin();
@@ -80,7 +79,6 @@ void setup() {
     pinMode(PIN_H_BRUECKE_IN1, OUTPUT);
     pinMode(PIN_H_BRUECKE_IN2, OUTPUT);
 
-    // Einziger verbleibender Hardware-Interrupt für die Durchflussmessung
     attachInterrupt(digitalPinToInterrupt(PIN_FLOW_SENSOR), flowSensorISR, RISING);
 
     tft.begin();
@@ -107,10 +105,9 @@ void loop() {
     updateSensors();
     checkGlobalAbbruch();
 
-    // Klick-Erkennung über das Modulino I2C-Modul
     bool click = encoderModulino.isPressed();
     if (click) {
-        delay(200); // Einfaches Entprellen für den I2C-Bus
+        delay(200); 
     }
 
     switch (currentState) {
