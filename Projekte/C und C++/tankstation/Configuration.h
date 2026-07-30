@@ -9,7 +9,7 @@
 #define ADRESSE_ENCODER_KNOB    0x30  
 
 // =========================================================================
-// PIN-ZUORDNUNG (DISPLAY, SD-KARTE & H-BRÜCKE)
+// PIN-ZUORDNUNG (DISPLAY, SD-KARTE, SENSORIK & H-BRÜCKE)
 // =========================================================================
 #define PIN_DISPLAY_CS   10
 #define PIN_DISPLAY_DC   9
@@ -18,6 +18,7 @@
 #define PIN_SD_CS        6   
 
 #define PIN_DRUCK_SENSOR A0
+#define PIN_AKKU_SENSOR  A1  // NEU: Analoger Eingang für den 1:5 LiPo-Spannungsteiler
 #define PIN_FLOW_SENSOR  2   
 
 #define PIN_H_BRUECKE_ENA 11  

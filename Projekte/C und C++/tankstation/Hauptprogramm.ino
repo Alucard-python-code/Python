@@ -15,11 +15,8 @@
 #include "System_Init.h"
 #include "Mode_Automatik.h"
 #include "Mode_Manuell_Settings.h"
-#include "Mode_Modellspeicher.h" // <-- NEU: Das 10. Modul einbinden
+#include "Mode_Modellspeicher.h"
 
-// =========================================================================
-// SPEICHERRESERVIERUNG & INSTANZIERUNG DER EXTERNEN VARIABLEN
-// =========================================================================
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
 ModulinoRelay relaisTanken(ADRESSE_RELAIS_TANKEN);    
 ModulinoRelay relaisLeeren(ADRESSE_RELAIS_LEEREN);
@@ -32,13 +29,14 @@ unsigned long leckageTimer = 0;
 
 uint16_t impulseProLiter = 200;
 float druckNullpunktSpannung = 0.5; 
-char systemPin = "0000";
+char systemPin[5] = "0000";
 uint16_t entleerenZeitSek = 4;       
-uint16_t leckageZeitMs = 2500;       
+uint16_t leckageZeitMs = 500;       
 float gesamtTreibstoffLiter = 0.0; 
+float akkuSpannungVolt = 12.0; // NEU: Globale Variable für den 3S LiPo Speicher
 
 Benutzer user;
-Modell modelle;
+Modell modelle[10];
 int selectedModellIdx = 0;
 
 volatile unsigned long flowImpulse = 0;
@@ -47,7 +45,7 @@ float getankteMengeMl = 0.0;
 float durchflussMlMin = 0.0;
 unsigned long lastFlowCalcTime = 0;
 
-char keyboardBuffer = "";
+char keyboardBuffer[16] = "";
 int keyboardMaxLen = 15;
 int kbRow = 0, kbCol = 0;
 char* targetStringPointer = nullptr;
@@ -61,11 +59,23 @@ void loop() {
     updateSensors(); 
     checkGlobalAbbruch(); 
 
+    // NEU: HARDWARE-LIPO-TIEFENTLADESCHUTZ (Zellenschutz bei 10,2V)
+    if (akkuSpannungVolt < 10.2 && currentState != SPLASH) {
+        setMotor(0, true); // Pumpe sofort und dauerhaft verriegeln
+        tft.fillScreen(ILI9341_RED);
+        tft.setTextColor(ILI9341_WHITE); tft.setTextSize(3);
+        tft.setCursor(40, 70); tft.print("AKKU LEER!");
+        tft.setTextSize(2);
+        tft.setCursor(40, 120); tft.print("Spannung: "); tft.print(akkuSpannungVolt, 1); tft.print(" V");
+        tft.setCursor(40, 150); tft.print("System gesperrt.");
+        tft.setCursor(40, 180); tft.print("Bitte Akku laden!");
+        while(true) { WDT.refresh(); } // Endlosschleife erzwingen -> Nur Reset/Ausschalten hilft
+    }
+
     bool click = encoderModulino.isPressed();
     if (click) { delay(200); }
 
     switch (currentState) {
-        
         case SPLASH:
             tft.fillScreen(ILI9341_BLACK);
             tft.setTextColor(ILI9341_GREEN); tft.setTextSize(2);
@@ -73,6 +83,7 @@ void loop() {
             tft.setTextColor(ILI9341_WHITE); tft.setTextSize(1);
             tft.setCursor(30, 80); tft.print("Pilot:  "); tft.print(user.vorname);
             tft.setCursor(30, 100); tft.print("Gesamt: "); tft.print(gesamtTreibstoffLiter, 2); tft.print(" Liter");
+            tft.setCursor(30, 120); tft.print("Akku:   "); tft.print(akkuSpannungVolt, 1); tft.print(" V");
             
             while(millis() - stateTimer < 3000) { WDT.refresh(); } 
             currentState = HAUPTMENU;
@@ -102,28 +113,16 @@ void loop() {
             break;
         }
 
-        case AUTOMATIK_SELECT:
-            handleAutomatikSelect(click); 
-            break;
-
-        case AUTOMATIK_RUN:
+        case AUTOMATIK_SELECT: handleAutomatikSelect(click); break;
+        case AUTOMATIK_RUN: 
             handleAutomatikRun(); 
-            if (currentState == HAUPTMENU && getankteMengeMl > 0) {
-                addFuelToTotalLog(getankteMengeMl); 
-            }
+            if (currentState == HAUPTMENU && getankteMengeMl > 0) { addFuelToTotalLog(getankteMengeMl); }
             break;
-
-        case MANUELL:
+        case MANUELL: 
             handleManuell(click); 
-            if (currentState == HAUPTMENU && getankteMengeMl > 0) {
-                addFuelToTotalLog(getankteMengeMl); 
-            }
+            if (currentState == HAUPTMENU && getankteMengeMl > 0) { addFuelToTotalLog(getankteMengeMl); }
             break;
-
-        case PIN_PRUEFUNG:
-            currentState = EINSTELLUNGEN;
-            encoderModulino.set(0);
-            break;
+        case PIN_PRUEFUNG: currentState = EINSTELLUNGEN; encoderModulino.set(0); break;
 
         case EINSTELLUNGEN: {
             int sel = abs(encoderModulino.get()) % 5;
@@ -149,10 +148,7 @@ void loop() {
             break;
         }
 
-        case SETTINGS_TIMER:
-            handleSettingsTimer(click); 
-            break;
-
+        case SETTINGS_TIMER: handleSettingsTimer(click); break;
         case KALIBRIERUNG_FLOW:
             drawHeader("FLOW KALIBRIERUNG");
             if (encoderModulino.isPressed()) {
@@ -166,16 +162,8 @@ void loop() {
             }
             break;
 
-        case MODELLSPEICHER:
-            handleModellspeicherMenu(click); // <-- NEU: Ausgelagert in Mode_Modellspeicher.h
-            break;
-
-        case TASTATUR_INPUT:
-            handleTastaturInput(click); 
-            break;
-
-        default:
-            currentState = HAUPTMENU;
-            break;
+        case MODELLSPEICHER: handleModellspeicherMenu(click); break;
+        case TASTATUR_INPUT: handleTastaturInput(click); break;
+        default: currentState = HAUPTMENU; break;
     }
 }

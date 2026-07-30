@@ -78,6 +78,14 @@ DIREKTE SENSORIK & AKTOREN:
 *   NANO R4 Pin D3  ➔ H-Brücke ENA (PWM-Ausgang zur Drehzahlregelung der Pumpe)
 *   NANO R4 Pin D4  ➔ H-Brücke IN1 (Richtungs-Pin Rechtslauf / Vorwärts)
 *   NANO R4 Pin D5  ➔ H-Brücke IN2 (Richtungs-Pin Linkslauf / Rückwärts)
+*   NANO R4 Pin A1  ➔ Analog-Eingang für die Akkuspannung (Über 1:5 Spannungsteiler)
+
+SCHALTBILD SPANNUNGSTEILER FÜR 3S LIPO (Ausschließlich für Analog-Pin A1):
+Das Modul bzw. die beiden Widerstände brechen die 12,6V des LiPos auf sichere 2,52V herunter.
+
+   LiPo Akku (+) ➔➔➔➔ [ 10 kΩ Widerstand ] ➔➔➔➔ AN PIN A1 ARDUINO
+                                         |
+                                         |➔➔➔➔ [ 4,7 kΩ Widerstand ] ➔➔➔➔ AN GND ARDUINO & LiPo (-)
 
 --------------------------------------------------------------------------------
 4. MODULINO I2C-ADRESSEN CONFIGURATION
