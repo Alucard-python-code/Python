@@ -31,9 +31,9 @@ struct Benutzer {
     char vorname[16];
     char nachname[16];
     char plz[5];
-    char wohnort[16];
+    char wohnort[20];
     char strasse[20];
-    char hausnummer[6];
+    char hausnummer[3];
 };
 
 enum MenuState {
