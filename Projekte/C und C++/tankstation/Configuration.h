@@ -30,7 +30,7 @@ struct Modell {
 struct Benutzer {
     char vorname[16];
     char nachname[16];
-    char plz[8];
+    char plz[5];
     char wohnort[16];
     char strasse[20];
     char hausnummer[6];
