@@ -1,6 +1,7 @@
 #pragma once
 #include <Arduino.h>
 #include <Arduino_Modulino.h>
+#include <WDT.h>
 #include "Configuration.h"
 
 extern ModulinoRelay relaisTanken;
@@ -16,29 +17,52 @@ extern float getankteMengeMl;
 extern float durchflussMlMin;
 extern unsigned long lastFlowCalcTime;
 
-inline void setMotor(int speedPercent, bool vorwaerts) {
-    if (speedPercent == 0) {
-        analogWrite(PIN_H_BRUECKE_ENA, 0);
-        digitalWrite(PIN_H_BRUECKE_IN1, LOW);
-        digitalWrite(PIN_H_BRUECKE_IN2, LOW);
+// Hilfsvariable für den Sanftanlauf
+static int aktuelleMotorLeistung = 0;
+
+inline void setMotor(int zielSpeedPercent, bool vorwaerts) {
+    int tatsaechlichesZiel = (zielSpeedPercent == 0) ? 0 : (vorwaerts ? abs(zielSpeedPercent) : -abs(zielSpeedPercent));
+    
+    // Wenn das Ziel bereits erreicht ist, direkt abbrechen
+    if (aktuelleMotorLeistung == tatsaechlichesZiel) return;
+
+    // Relais sofort passend zur Richtung schalten, bevor der Motor hochrampt
+    if (tatsaechlichesZiel == 0) {
         relaisTanken.turnOff();
         relaisLeeren.turnOff();
-    } 
-    else if (vorwaerts && speedPercent > 0) {
-        int pwmValue = map(abs(speedPercent), 0, 100, 0, 255);
-        digitalWrite(PIN_H_BRUECKE_IN1, HIGH);
-        digitalWrite(PIN_H_BRUECKE_IN2, LOW);
-        analogWrite(PIN_H_BRUECKE_ENA, pwmValue);
+    } else if (tatsaechlichesZiel > 0) {
         relaisTanken.turnOn();
         relaisLeeren.turnOff();
-    } 
-    else {
-        int pwmValue = map(abs(speedPercent), 0, 100, 0, 255);
-        digitalWrite(PIN_H_BRUECKE_IN1, LOW);
-        digitalWrite(PIN_H_BRUECKE_IN2, HIGH);
-        analogWrite(PIN_H_BRUECKE_ENA, pwmValue);
+    } else {
         relaisTanken.turnOff();
         relaisLeeren.turnOn();
+    }
+
+    // SANFTANLAUF-RAMPE: Erhöht/verringert die Leistung in Schritten über ca. 1 Sekunde
+    unsigned long rampTimer = millis();
+    while (aktuelleMotorLeistung != tatsaechlichesZiel) {
+        WDT.refresh(); // Watchdog während der Schleife füttern
+        
+        if (millis() - rampTimer >= 10) { // Alle 10ms die Leistung um 1% anpassen (1000ms Gesamtdauer)
+            if (aktuelleMotorLeistung < tatsaechlichesZiel) aktuelleMotorLeistung++;
+            else aktuelleMotorLeistung--;
+            
+            // PWM-Signal an die H-Brücke ausgeben
+            int pwmValue = map(abs(aktuelleMotorLeistung), 0, 100, 0, 255);
+            
+            if (aktuelleMotorLeistung == 0) {
+                digitalWrite(PIN_H_BRUECKE_IN1, LOW);
+                digitalWrite(PIN_H_BRUECKE_IN2, LOW);
+            } else if (aktuelleMotorLeistung > 0) {
+                digitalWrite(PIN_H_BRUECKE_IN1, HIGH);
+                digitalWrite(PIN_H_BRUECKE_IN2, LOW);
+            } else {
+                digitalWrite(PIN_H_BRUECKE_IN1, LOW);
+                digitalWrite(PIN_H_BRUECKE_IN2, HIGH);
+            }
+            analogWrite(PIN_H_BRUECKE_ENA, pwmValue);
+            rampTimer = millis();
+        }
     }
 }
 

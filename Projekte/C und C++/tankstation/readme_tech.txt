@@ -48,6 +48,10 @@ Das System verwaltet beim Betrieb vollautomatisch 3 CSV-Textdateien auf der Kart
                   Format: [Modellname],[VolumenMl],[MaxDruckMbar],[IstBeutel_0_oder_1]
                   Beispiel: Jet-Trainer,2500,150,1
 
+4.  total.txt   ➔ Beinhaltet die Lebenszeit-Fördermenge der Tankstation in Litern.
+                  Format: [Gesamtanzahl_Liter]
+                  Beispiel: 145.75
+
 *Hinweis:* Sollte die SD-Karte beim ersten Start komplett leer sein, legt der 
 Arduino diese 3 Dateien automatisch mit sicheren Standardwerten an.
 

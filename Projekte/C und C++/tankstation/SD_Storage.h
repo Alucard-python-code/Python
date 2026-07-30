@@ -104,3 +104,38 @@ inline void loadModelleFromSD() {
         file.close();
     }
 }
+// [Fügen Sie diese beiden Funktionen einfach unten an Ihre bestehende SD_Storage.h an]
+
+extern float gesamtTreibstoffLiter;
+
+inline void loadTotalFuelFromSD() {
+    if (SD.exists("total.txt")) {
+        File file = SD.open("total.txt");
+        if (file) {
+            gesamtTreibstoffLiter = file.parseFloat();
+            file.close();
+        }
+    } else {
+        gesamtTreibstoffLiter = 0.0;
+    }
+}
+
+inline void addFuelToTotalLog(float sessionMl) {
+    if (sessionMl <= 0) return;
+    
+    // Berechne den neuen Gesamtwert (ml in Liter umrechnen)
+    gesamtTreibstoffLiter += (sessionMl / 1000.0);
+    
+    // Sicheres Schreibverfahren via .tmp Datei
+    File file = SD.open("total.tmp", FILE_WRITE);
+    if (file) {
+        file.println(gesamtTreibstoffLiter, 2); // Auf 2 Nachkommastellen genau loggen
+        file.close();
+        SD.remove("total.txt");
+        File src = SD.open("total.tmp");
+        File dst = SD.open("total.txt", FILE_WRITE);
+        if(src && dst) { while(src.available()) { dst.write(src.read()); } }
+        if(src) src.close(); if(dst) dst.close();
+        SD.remove("total.tmp");
+    }
+}

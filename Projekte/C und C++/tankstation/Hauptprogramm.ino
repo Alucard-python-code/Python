@@ -15,7 +15,11 @@
 #include "System_Init.h"
 #include "Mode_Automatik.h"
 #include "Mode_Manuell_Settings.h"
+#include "Mode_Modellspeicher.h" // <-- NEU: Das 10. Modul einbinden
 
+// =========================================================================
+// SPEICHERRESERVIERUNG & INSTANZIERUNG DER EXTERNEN VARIABLEN
+// =========================================================================
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
 ModulinoRelay relaisTanken(ADRESSE_RELAIS_TANKEN);    
 ModulinoRelay relaisLeeren(ADRESSE_RELAIS_LEEREN);
@@ -28,12 +32,13 @@ unsigned long leckageTimer = 0;
 
 uint16_t impulseProLiter = 200;
 float druckNullpunktSpannung = 0.5; 
-char systemPin[5] = "0000";
+char systemPin = "0000";
 uint16_t entleerenZeitSek = 4;       
 uint16_t leckageZeitMs = 2500;       
+float gesamtTreibstoffLiter = 0.0; 
 
 Benutzer user;
-Modell modelle[10];
+Modell modelle;
 int selectedModellIdx = 0;
 
 volatile unsigned long flowImpulse = 0;
@@ -42,7 +47,7 @@ float getankteMengeMl = 0.0;
 float durchflussMlMin = 0.0;
 unsigned long lastFlowCalcTime = 0;
 
-char keyboardBuffer[16] = "";
+char keyboardBuffer = "";
 int keyboardMaxLen = 15;
 int kbRow = 0, kbCol = 0;
 char* targetStringPointer = nullptr;
@@ -53,18 +58,23 @@ void setup() {
 
 void loop() {
     WDT.refresh(); 
-    updateSensors();
-    checkGlobalAbbruch();
+    updateSensors(); 
+    checkGlobalAbbruch(); 
 
     bool click = encoderModulino.isPressed();
     if (click) { delay(200); }
 
     switch (currentState) {
+        
         case SPLASH:
             tft.fillScreen(ILI9341_BLACK);
             tft.setTextColor(ILI9341_GREEN); tft.setTextSize(2);
             tft.setCursor(30, 30); tft.print("TANKSTATION BEREIT");
-            while(millis() - stateTimer < 2000) { WDT.refresh(); } 
+            tft.setTextColor(ILI9341_WHITE); tft.setTextSize(1);
+            tft.setCursor(30, 80); tft.print("Pilot:  "); tft.print(user.vorname);
+            tft.setCursor(30, 100); tft.print("Gesamt: "); tft.print(gesamtTreibstoffLiter, 2); tft.print(" Liter");
+            
+            while(millis() - stateTimer < 3000) { WDT.refresh(); } 
             currentState = HAUPTMENU;
             encoderModulino.set(0);
             break;
@@ -76,8 +86,8 @@ void loop() {
                 drawHeader("HAUPTMENU");
                 const char* items[] = {"1. Automatik Modus", "2. Manueller Modus", "3. Einstellungen", "4. Modellspeicher"};
                 for (int i = 0; i < 4; i++) {
-                    if (i == sel) { tft.fillRect(15, 45 + (i * 38), 290, 32, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); }
-                    else tft.setTextColor(ILI9341_WHITE);
+                    if (i == sel) { tft.fillRect(15, 45 + (i * 38), 290, 32, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); } 
+                    else { tft.setTextColor(ILI9341_WHITE); }
                     tft.setCursor(25, 53 + (i * 38)); tft.setTextSize(2); tft.print(items[i]);
                 }
                 lastSel = sel;
@@ -98,10 +108,16 @@ void loop() {
 
         case AUTOMATIK_RUN:
             handleAutomatikRun(); 
+            if (currentState == HAUPTMENU && getankteMengeMl > 0) {
+                addFuelToTotalLog(getankteMengeMl); 
+            }
             break;
 
         case MANUELL:
             handleManuell(click); 
+            if (currentState == HAUPTMENU && getankteMengeMl > 0) {
+                addFuelToTotalLog(getankteMengeMl); 
+            }
             break;
 
         case PIN_PRUEFUNG:
@@ -116,8 +132,8 @@ void loop() {
                 drawHeader("EINSTELLUNGEN");
                 const char* opts[] = {"1. Durchfluss-Kalibr.", "2. Druck-Nullung", "3. System-PIN aendern", "4. Benutzerdaten", "5. Timer & Leckage"};
                 for (int i = 0; i < 5; i++) {
-                    if (i == sel) { tft.fillRect(15, 42 + (i * 33), 290, 26, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); }
-                    else tft.setTextColor(ILI9341_WHITE);
+                    if (i == sel) { tft.fillRect(15, 42 + (i * 33), 290, 26, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); } 
+                    else { tft.setTextColor(ILI9341_WHITE); }
                     tft.setCursor(25, 47 + (i * 33)); tft.setTextSize(2); tft.print(opts[i]);
                 }
                 lastSel = sel;
@@ -150,64 +166,12 @@ void loop() {
             }
             break;
 
-        case MODELLSPEICHER: {
-            int menuIndex = abs(encoderModulino.get()) % 11; 
-            static int lastMenuIndex = -1;
-            
-            if (menuIndex != lastMenuIndex) {
-                drawHeader("MODELLSPEICHER-UEBERSICHT");
-                tft.setTextSize(1); tft.setTextColor(ILI9341_WHITE);
-                tft.setCursor(10, 40); tft.print("NR | NAME         | VOL (ml) | P (max) | TYP");
-                tft.drawFastHLine(10, 52, 300, ILI9341_WHITE);
-                
-                int startZeile = 0;
-                if (menuIndex > 4) {
-                    startZeile = menuIndex - 4;
-                    if (startZeile > 5) startZeile = 5; 
-                }
-
-                for (int visibleIdx = 0; visibleIdx < 5; visibleIdx++) {
-                    int i = startZeile + visibleIdx; 
-                    
-                    if (i == menuIndex) {
-                        tft.fillRect(8, 57 + (visibleIdx * 26), 304, 22, ILI9341_DARKGREEN);
-                        tft.setTextColor(ILI9341_BLACK);
-                    } else {
-                        tft.setTextColor(ILI9341_WHITE);
-                    }
-                    
-                    tft.setCursor(10, 64 + (visibleIdx * 26));
-                    tft.print(i + 1); if (i + 1 < 10) tft.print(" ");
-                    tft.print(" | ");
-                    tft.print(modelle[i].name); tft.setCursor(115, 64 + (visibleIdx * 26)); tft.print("| ");
-                    tft.print(modelle[i].tankvolumenMl); tft.setCursor(185, 64 + (visibleIdx * 26)); tft.print("| ");
-                    tft.print(modelle[i].maxDruckMbar); tft.setCursor(245, 64 + (visibleIdx * 26)); tft.print("| ");
-                    tft.print(modelle[i].istBeutel ? "Beutel" : "Normal");
-                }
-                
-                if (menuIndex == 10) {
-                    tft.fillRect(15, 192, 290, 26, ILI9341_RED); 
-                    tft.setTextColor(ILI9341_WHITE);
-                } else {
-                    tft.fillRect(15, 192, 290, 26, ILI9341_NAVY);
-                    tft.setTextColor(ILI9341_LIGHTGREY);
-                }
-                tft.setTextSize(1); tft.setCursor(65, 201);
-                tft.print("--> ZURUECK ZUM HAUPTMENU (Klick)");
-                
-                lastMenuIndex = menuIndex;
-            }
-            
-            if (click && menuIndex == 10) { 
-                currentState = HAUPTMENU; 
-                encoderModulino.set(0); 
-                lastMenuIndex = -1; 
-            }
+        case MODELLSPEICHER:
+            handleModellspeicherMenu(click); // <-- NEU: Ausgelagert in Mode_Modellspeicher.h
             break;
-        }
 
         case TASTATUR_INPUT:
-            handleTastaturInput(click);
+            handleTastaturInput(click); 
             break;
 
         default:

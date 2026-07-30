@@ -56,7 +56,7 @@ inline void checkGlobalAbbruch() {
         }
     }
 }
-
+extern void loadTotalFuelFromSD(); // Referenz deklarieren
 inline void runSetup() {
     Modulino.begin();
     relaisTanken.begin();
@@ -87,6 +87,7 @@ inline void runSetup() {
         loadCalibrationFromSD();
         loadPinFromSD();
         loadModelleFromSD();
+        loadTotalFuelFromSD(); // <-- NEU: Lädt die Lebenszeit-Liter beim Start
     }
     
     if (modelle[0].tankvolumenMl <= 0) {
