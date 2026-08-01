@@ -1,0 +1,70 @@
+#include <avr/wdt.h>
+
+// Pins für Bahn 1 (System 1)
+const int IN_BAHN_1 = 2;       // Puls von Waveshare-Modul 1 (5V)
+const int OUT_MODULINO_1 = 12; // Steuert Modulino-Relais 1 (unterbricht 24V zu Schütz 1)
+
+// Pins für Bahn 2 (System 2)
+const int IN_BAHN_2 = 3;       // Puls von Waveshare-Modul 2 (5V)
+const int OUT_MODULINO_2 = 13; // Steuert Modulino-Relais 2 (unterbricht 24V zu Schütz 2)
+
+// Zeit- und Zustandstracker
+int lastState1 = LOW;
+unsigned long lastChange1 = 0;
+int lastState2 = LOW;
+unsigned long lastChange2 = 0;
+
+// Sicherheits-Timeout (1,2 Sekunden für den 0,5s-Python-Blinktakt)
+const unsigned long TIMEOUT_MS = 1200; 
+
+void setup() {
+  pinMode(IN_BAHN_1, INPUT);
+  pinMode(OUT_MODULINO_1, OUTPUT);
+  pinMode(IN_BAHN_2, INPUT);
+  pinMode(OUT_MODULINO_2, OUTPUT);
+  
+  // Beim Start/Reset des Schaltschranks beide Modulino-Relais AUS 
+  // (Schütze stromlos = Motoren im sicheren Zustand)
+  digitalWrite(OUT_MODULINO_1, LOW); 
+  digitalWrite(OUT_MODULINO_2, LOW); 
+  
+  // Startwerte einlesen
+  lastState1 = digitalRead(IN_BAHN_1);
+  lastState2 = digitalRead(IN_BAHN_2);
+  lastChange1 = millis();
+  lastChange2 = millis();
+
+  // Falls der Arduino-Chip selbst blockiert, resettet er sich nach 150ms
+  wdt_enable(WDTO_150MS); 
+}
+
+void loop() {
+  wdt_reset(); // Den internen Chip-Watchdog füttern
+  unsigned long currentMillis = millis();
+
+  // --- ÜBERWACHUNG BAHN 1 ---
+  int state1 = digitalRead(IN_BAHN_1);
+  if (state1 != lastState1) {
+    lastChange1 = currentMillis; // Heartbeat registriert
+    lastState1 = state1;
+  }
+  
+  if (currentMillis - lastChange1 > TIMEOUT_MS) {
+    digitalWrite(OUT_MODULINO_1, LOW);  // Raspi 1 / Waveshare 1 weg -> Modulino fällt ab -> Schütz 1 AUS
+  } else {
+    digitalWrite(OUT_MODULINO_1, HIGH); // Normalbetrieb / Automatischer Reset -> Modulino zieht an -> Schütz 1 FREI
+  }
+
+  // --- ÜBERWACHUNG BAHN 2 ---
+  int state2 = digitalRead(IN_BAHN_2);
+  if (state2 != lastState2) {
+    lastChange2 = currentMillis; // Heartbeat registriert
+    lastState2 = state2;
+  }
+  
+  if (currentMillis - lastChange2 > TIMEOUT_MS) {
+    digitalWrite(OUT_MODULINO_2, LOW);  // Raspi 2 / Waveshare 2 weg -> Modulino fällt ab -> Schütz 2 AUS
+  } else {
+    digitalWrite(OUT_MODULINO_2, HIGH); // Normalbetrieb / Automatischer Reset -> Modulino zieht an -> Schütz 2 FREI
+  }
+}
