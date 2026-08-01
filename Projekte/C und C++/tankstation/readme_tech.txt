@@ -59,9 +59,9 @@ Arduino diese 3 Dateien automatisch mit sicheren Standardwerten an.
 3. VERKABELUNG & PIN-BELEGUNG (NANO R4)
 --------------------------------------------------------------------------------
 SPI-BUS (Display & SD-Karte teilen sich die Hardware-Datenleitungen):
-*   NANO R4 Pin D13 ➔ SPI COPI / MOSI (Data In)
+*   NANO R4 Pin D13 ➔ SPI SCK (Clock / Takt)
 *   NANO R4 Pin D12 ➔ SPI CIPO / MISO (Data Out)
-*   NANO R4 Pin D11 ➔ SPI SCK (Clock / Takt)
+*   NANO R4 Pin D11 ➔ SPI COPI / MOSI (Data In)
 *   NANO R4 Pin D10 ➔ Display CS (Chip Select Display)
 *   NANO R4 Pin D9  ➔ Display DC / RS (Data/Command)
 *   NANO R4 Pin D8  ➔ Display RST (Reset)
