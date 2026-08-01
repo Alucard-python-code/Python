@@ -11,6 +11,7 @@ class DriveThread(QThread):
         super().__init__()
         self.mode = mode; self.client = client; self.times = times
         self.ist_referenziert = ist_referenziert; self._is_running = True
+        self.latest_inputs = [] # Speicher für die letzten gelesenen Eingänge
 
     def write_hardware_coil(self, kanal, zustand):
         try: return self.client.write_single_coil(kanal, zustand)
@@ -25,6 +26,7 @@ class DriveThread(QThread):
             coils = self.client.read_coils(0, 8)
 
             if inputs and len(inputs) >= 6:
+                self.latest_inputs = inputs # Für lokale Abfragen im Thread sichern
                 self.io_update_signal.emit(inputs, coils if coils else [False]*8)
 
                 if not inputs[0]:
@@ -44,13 +46,12 @@ class DriveThread(QThread):
         elif self.mode == "Wertung":
             wd_limit = self.times.get("Watchdog Wertung", 10.0)
         else:
-            wd_limit = self.times.get("Watchdog HomeFahrt", 20.0) # Einstellbarer oder fester Standard-Wert
+            wd_limit = self.times.get("Watchdog HomeFahrt", 20.0)
 
         try:
             def check_watchdog():
                 if (time.time() - start_time) > wd_limit:
                     if self.mode == "HomeFahrt":
-                        # Spezieller Text für das Abfragefenster in der GUI
                         raise Exception("TIMEOUT_HOMEFAHRT")
                     else:
                         raise Exception(f"WATCHDOG: Timeout bei {self.mode} erreicht ({wd_limit}s)")
@@ -81,18 +82,42 @@ class DriveThread(QThread):
             # 2. MODUS: WERTUNG
             # ====================================================================
             elif self.mode == "Wertung":
-                self.write_hardware_coil(1, True); time.sleep(0.1); self.write_hardware_coil(3, True)
+                # Phase 1: Links-Lauf (1) und Schnell (3) einschalten
+                self.write_hardware_coil(1, True)
+                time.sleep(0.1)
+                self.write_hardware_coil(3, True)
+                self.status_signal.emit("Wertung: Schnellphase")
 
+                # Schnellphase läuft exakt so lange, wie in "Wertung Schnell" definiert
+                end_time_schnell = time.time() + self.times.get("Wertung Schnell", 2.5)
+                while time.time() < end_time_schnell:
+                    check_watchdog()
+                    self.check_inputs_during_flight()
+                    
+                    # Sicherheitsnetz: Falls der Endschalter (Index 1) schon in der 
+                    # Schnellphase getroffen wird, sofort abbrechen
+                    if self.latest_inputs and self.latest_inputs[1]:
+                        break
+                    time.sleep(0.05)
+
+                # Phase 2: Schnell (3) ausschalten und Langsam (2) einschalten
+                self.write_hardware_coil(3, False)
+                self.write_hardware_coil(2, True)
+                self.status_signal.emit("Wertung: Langsamphase")
+
+                # Langsamphase läuft nun so lange, bis der Endschalter (Index 1) schaltet
                 while self._is_running:
                     check_watchdog()
                     self.check_inputs_during_flight()
                     
-                    inputs = self.client.read_discrete_inputs(0, 8)
-                    if inputs and inputs[1]: 
+                    # Endschalter-Abfrage (Index 1) – stoppt die Fahrt im Ziel
+                    if self.latest_inputs and self.latest_inputs[1]: 
                         break
                     time.sleep(0.05)
 
-                self.write_hardware_coil(1, False); self.write_hardware_coil(3, False)
+                # Nach dem Verlassen der Schleife (Endschalter erreicht): Alles sicher abschalten
+                self.write_hardware_coil(1, False)
+                self.write_hardware_coil(2, False)
 
             # ====================================================================
             # 3. MODUS: HOMEFAHRT
@@ -104,8 +129,7 @@ class DriveThread(QThread):
                     check_watchdog()
                     self.check_inputs_during_flight()
                     
-                    inputs = self.client.read_discrete_inputs(0, 8)
-                    if inputs and inputs[1]: 
+                    if self.latest_inputs and self.latest_inputs[1]: 
                         break
                     time.sleep(0.05)
 
