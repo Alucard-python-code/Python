@@ -341,7 +341,7 @@ class SchussbahnApp(QWidget):
         # Wenn das System 5 Minuten (300 Sek.) am Stück ununterbrochen verbunden war,
         # trennen wir die Verbindung im Leerlauf einmal kurz für 20ms freiwillig.
         # Das setzt den 10-Minuten-Abschalt-Timer des Waveshare-Boards kontrolliert auf Null zurück!
-        if self.client.connected and (current_seconds - self.last_successful_read > 300):
+        if self.client.connected and (current_seconds - self.last_successful_read > 120):
             try:
                 self.client.close()
                 time.sleep(0.02)
