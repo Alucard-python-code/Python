@@ -380,7 +380,6 @@ class SchussbahnApp(QWidget):
         self.animation_timer = QTimer(self)
         self.animation_timer.timeout.connect(self.process_target_movement)
         self.animation_timer.start(30)
-
     def process_target_movement(self):
         elapsed = time.time() - self.anim_start_time
         progress_percent = 0
@@ -409,9 +408,10 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'animation_timer') and self.animation_timer.isActive():
             self.animation_timer.stop()
         try:
+            # KORREKTUR: Nutzt das neue device_id Feld und wertet direkt das Listen-Array der Bits aus
             res = self.client.read_discrete_inputs(0, 8, device_id=1)
             if not res.isError() and res.bits:
-                if res.bits[1]:
+                if res.bits[1]: # Wenn Wagen physisch wieder am Start-Endschalter (Index 1) steht
                     self.track_bar.setValue(0)
                     self.moving_target.move(0, -3) 
         except:
