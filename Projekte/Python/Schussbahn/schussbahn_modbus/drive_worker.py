@@ -124,8 +124,11 @@ class DriveThread(QThread):
                     
                     # Sicherheitsnetz: Falls der Endschalter (Index 1) schon in der 
                     # Schnellphase getroffen wird, sofort abbrechen
-                    if self.latest_inputs and self.latest_inputs[1]:
-                        break
+                    # Prüft, ob die Liste geladen wurde und ob an Index 1 ein 'True' (Endschalter aktiv) steht
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        if self.latest_inputs[1] == True:
+                            break
+
                     time.sleep(0.05)
 
                 # Phase 2: Schnell (3) ausschalten und Langsam (2) einschalten
@@ -139,8 +142,9 @@ class DriveThread(QThread):
                     self.check_inputs_during_flight()
                     
                     # Endschalter-Abfrage (Index 1) – stoppt die Fahrt im Ziel
-                    if self.latest_inputs and self.latest_inputs[1]: 
-                        break
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        if self.latest_inputs[1] == True:
+                            break
                     time.sleep(0.05)
 
                 # Nach dem Verlassen der Schleife (Endschalter erreicht): Alles sicher abschalten
@@ -157,8 +161,9 @@ class DriveThread(QThread):
                     check_watchdog()
                     self.check_inputs_during_flight()
                     
-                    if self.latest_inputs and self.latest_inputs[1]: 
-                        break
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        if self.latest_inputs[1] == True:
+                            break
                     time.sleep(0.05)
 
                 self.write_hardware_coil(1, False); self.write_hardware_coil(2, False)
