@@ -8,7 +8,7 @@ import time
 from PyQt5.QtWidgets import*
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
-from pymodbus.client import FramerType
+from pymodbus import FramerType
 from pymodbus.client import ModbusTcpClient as ModbusClient # funktioniert nur mit raspi
 
 from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log, save_settings
@@ -262,24 +262,32 @@ class SchussbahnApp(QWidget):
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        if not self.client.is_open: self.client.open()
+        # NEU: Prüfen und verbinden via .connected und .connect()
+        if not self.client.connected: 
+            self.client.connect()
 
-        if not self.client.is_open:
+        if not self.client.connected:
             self.update_ui_connectivity(False)
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen!")
             return
-            
+
         self.update_ui_connectivity(True)
 
-        self.client.unit_id = 1
-        if not self.client.write_multiple_coils(0, [False] * 8):
+        # NEU: .write_coils() statt .write_multiple_coils() mit device_id=1
+        res_coils = self.client.write_coils(0, [False] * 8, device_id=1)
+        if res_coils.isError():
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
             return
 
-        inputs = self.client.read_discrete_inputs(0, 8)
-        if not inputs or len(inputs) < 6:
+        # NEU: .read_discrete_inputs() mit device_id=1
+        res_inputs = self.client.read_discrete_inputs(0, 8, device_id=1)
+        if res_inputs.isError():
             self.handle_system_error("FEHLER: Eingänge konnten nicht gelesen werden!")
             return
+        
+        # NEU: Die gelesenen Bits liegen bei pymodbus im Feld .bits
+        inputs = res_inputs.bits
+
 
         self.latest_inputs = inputs
         if not inputs[0]: 
