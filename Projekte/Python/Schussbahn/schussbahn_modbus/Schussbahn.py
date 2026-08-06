@@ -332,62 +332,66 @@ class SchussbahnApp(QWidget):
 
 
     def cyclic_monitor(self):
-        current_millis = time.time() * 1000
+        current_millis = time.time() * 1000  # Aktuelle Zeit in Millisekunden
 
-        # --- AUTO-RECONNECT IM HALBSEKUNDEN-TAKT ---
+        # --- 1. AUTO-RECONNECT (Komplett geschützt gegen Einfrieren) ---
         if not self.client.connected:
             if current_millis - self.last_reconnect_attempt >= 500:
                 self.last_reconnect_attempt = current_millis
                 try:
                     self.client.close() 
-                    time.sleep(0.02)
+                    time.sleep(0.04) # Dem Pi 5 Zeit geben, den Socket freizugeben
                     self.client.connect() 
                 except:
                     pass
-            # UI sperren bei Verbindungsverlust
+
             self.status_msg.setText("FEHLER: Modbus Verbindung verloren! Suche Verbindung...")
             self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border: 1px solid #ffaa00; border-radius: 6px; font-weight: bold;")
             self.update_ui_connectivity(False)
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
             return 
-        # ----------------------------------------
+        # -----------------------------------------------------------------
 
-        # Wenn der Wagen aktiv fährt, überspringen wir ab hier den restlichen Monitor,
-        # damit es zu keinem Paket-Konflikt mit dem Fahr-Thread kommt!
+        # WICHTIG: Wenn der Wagen fährt, pausiert der Monitor komplett!
+        # Das überlässt dem Fahr-Thread das Kabel exklusiv und verhindert Abstürze an den Schranken!
         if self.is_driving: 
             return
 
-        # --- AKTIVER 0,5-SEKUNDEN-HEARTBEAT AN RELAIS 5 (NUR IM LEERLAUF) ---
-        if self.client.connected:
-            self.heartbeat_counter += 1
-            if self.heartbeat_counter >= 2:
-                self.heartbeat_counter = 0
-                self.heartbeat_state = not self.heartbeat_state
-                try:
-                    self.client.write_coil(5, value=self.heartbeat_state, device_id=1)
-                except Exception as e:
-                    logging.error(f"Heartbeat-Schreibfehler an Relais 5: {e}")
-        # -------------------------------------------------------------------
-
-        # Sichere Datenabfrage der Schaltschrank-Zustände im Stillstand
+        # --- 2. SICHERE DATENABFRAGE IM STILLSTAND (try-except block) ---
         try:
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            time.sleep(0.04) # 40ms Schutzpause für die serielle RTU-Verarbeitung im Waveshare!
             res_coils = self.client.read_coils(0, count=8, device_id=1)
 
-            if res_inputs.isError() or res_coils.isError():
-                raise Exception("Ungültiges Modbus-Datenpaket erhalten")
+            if res_inputs.isError() or res_coils.isError() or not res_inputs.bits:
+                raise Exception("Ungültiges oder leeres Modbus-Datenpaket erhalten")
 
             inputs = res_inputs.bits
             coils = res_coils.bits
 
         except Exception as e:
             logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
-            try: self.client.close()
-            except: pass
+            try:
+                self.client.close() # Löst den Reconnect im nächsten Takt aus
+            except:
+                pass
             return
 
-        # UI-Aktualisierung im Stillstand
+        # --- 3. INTELLIGENTER 0,5s-HEARTBEAT AN RELAIS 5 ---
+        # Wird nur ausgeführt, wenn das Auslesen der IOs fehlerfrei geklappt hat
+        self.heartbeat_counter += 1
+        if self.heartbeat_counter >= 2:
+            self.heartbeat_counter = 0
+            self.heartbeat_state = not self.heartbeat_state
+            try:
+                time.sleep(0.04) # Kurze Pause nach dem Lesen, bevor wir schreiben
+                self.client.write_coil(5, value=self.heartbeat_state, device_id=1)
+            except:
+                pass
+        # ----------------------------------------------------
+
+        # --- 4. UI-AUSWERTUNG DER HARDWARE ---
         self.update_ui_connectivity(True)
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
@@ -395,15 +399,13 @@ class SchussbahnApp(QWidget):
         if self.system_fault:
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
-            try: self.client.write_coils(0, values=[False] * 8, device_id=1)
-            except: pass
             return
 
         if not inputs or len(inputs) < 2: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
-        # KORREKTUR: Explizite Prüfung von Index 1 (Start-Endschalter)
+        # SICHCHERE AUSWERTUNG ÜBER DEN INDEX [1]
         if inputs[1]:  
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
@@ -414,6 +416,7 @@ class SchussbahnApp(QWidget):
             self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(True)
+
 
 
 
