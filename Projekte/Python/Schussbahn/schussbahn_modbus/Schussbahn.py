@@ -331,7 +331,7 @@ class SchussbahnApp(QWidget):
 
 
     def cyclic_monitor(self):
-        current_millis = time.time() * 1000  # Aktuelle Zeit in Millisekunden
+        current_millis = time.time() * 1000
 
         # --- AUTO-RECONNECT IM HALBSEKUNDEN-TAKT ---
         if not self.client.connected:
@@ -343,7 +343,7 @@ class SchussbahnApp(QWidget):
                     self.client.connect() 
                 except:
                     pass
-
+            # UI sperren bei Verbindungsverlust
             self.status_msg.setText("FEHLER: Modbus Verbindung verloren! Suche Verbindung...")
             self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border: 1px solid #ffaa00; border-radius: 6px; font-weight: bold;")
             self.update_ui_connectivity(False)
@@ -352,25 +352,24 @@ class SchussbahnApp(QWidget):
             return 
         # ----------------------------------------
 
-        # --- AKTIVER 0,5-SEKUNDEN-HEARTBEAT AN RELAIS 5 ---
-        # Da der cyclic_monitor alle 250ms läuft, blinkt Relais 5 bei jedem 2. Durchlauf (500ms / 0,5s)
+        # Wenn der Wagen aktiv fährt, überspringen wir ab hier den restlichen Monitor,
+        # damit es zu keinem Paket-Konflikt mit dem Fahr-Thread kommt!
+        if self.is_driving: 
+            return
+
+        # --- AKTIVER 0,5-SEKUNDEN-HEARTBEAT AN RELAIS 5 (NUR IM LEERLAUF) ---
         if self.client.connected:
             self.heartbeat_counter += 1
             if self.heartbeat_counter >= 2:
                 self.heartbeat_counter = 0
-                self.heartbeat_state = not self.heartbeat_state  # Zustand invertieren (True/False)
+                self.heartbeat_state = not self.heartbeat_state
                 try:
-                    # Schaltet Relais 5 (Kanal 5) auf den neuen Zustand
                     self.client.write_coil(5, value=self.heartbeat_state, device_id=1)
                 except Exception as e:
                     logging.error(f"Heartbeat-Schreibfehler an Relais 5: {e}")
-        # --------------------------------------------------
+        # -------------------------------------------------------------------
 
-        # Wenn der Wagen aktiv fährt, überspringen wir die normale IO-Zustandsprüfung der GUI
-        if self.is_driving: 
-            return
-
-        # Sichere Datenabfrage der restlichen Schaltschrank-Zustände im Stillstand
+        # Sichere Datenabfrage der Schaltschrank-Zustände im Stillstand
         try:
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
             res_coils = self.client.read_coils(0, count=8, device_id=1)
@@ -383,13 +382,11 @@ class SchussbahnApp(QWidget):
 
         except Exception as e:
             logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
-            try:
-                self.client.close() 
-            except:
-                pass
+            try: self.client.close()
+            except: pass
             return
 
-        # Ab hier folgt dein ganz normaler Auswertungscode (self.update_ui_connectivity(True) etc.)
+        # UI-Aktualisierung im Stillstand
         self.update_ui_connectivity(True)
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
@@ -405,7 +402,8 @@ class SchussbahnApp(QWidget):
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
-        if inputs[1]:  # Wenn Start-Endschalter belegt
+        # KORREKTUR: Explizite Prüfung von Index 1 (Start-Endschalter)
+        if inputs[1]:  
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(True)
@@ -415,6 +413,7 @@ class SchussbahnApp(QWidget):
             self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(True)
+
 
 
     def update_ui_connectivity(self, is_connected):
