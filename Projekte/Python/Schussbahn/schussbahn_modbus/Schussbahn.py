@@ -48,7 +48,7 @@ class SchussbahnApp(QWidget):
 
         modbus_ip = self.times.get("Modbus-IP", "192.168.8.250")
         # Port auf 502 standardisiert bzw. deinen ursprünglichen Zustand beibehalten, Timeout kurz gehalten
-        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, framer=FramerType.RTU
+        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, framer=FramerType.RTU)
         self.client.connect()
         
         # UI-Fixierung für exakt 1024x600 px
