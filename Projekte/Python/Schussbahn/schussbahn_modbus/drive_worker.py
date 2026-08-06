@@ -30,29 +30,27 @@ class DriveThread(QThread):
     def check_inputs_during_flight(self):
         """
         Prüft den Status der Eingänge während der Fahrt.
-        Löst bei Sicherheitsverletzungen oder Kommunikationsfehlern eine 
-        Exception aus, um das System in den sicheren Zustand zu versetzen.
         """
         if not self._is_running:
             raise Exception("Thread wurde manuell gestoppt")
 
         try:
-            # KORREKTUR: Korrekte pymodbus RTU-over-TCP Syntax mit benannten Argumenten
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            time.sleep(0.04) # Schutzpause für den Pi 5 / Waveshare Puffer
             res_coils = self.client.read_coils(0, count=8, device_id=1)
 
             if res_inputs.isError() or res_coils.isError():
-                raise Exception("Kommunikationsfehler: Fehlerantwort von Modbus erhalten")
+                raise Exception("Kommunikationsfehler: Fehlerantwort von Modbus")
 
-            inputs = res_inputs.bits
-            coils = res_coils.bits
+            # REPARATUR FÜR DEN PI 5: 
+            # Wir zwingen die Modbus-Bits in eine echte, feste Standard-Python-Liste [True, False, ...].
+            # Das verhindert jegliche Zugriffsfehler (IndexError/TypeError) in den Schleifen!
+            inputs = list(res_inputs.bits) if res_inputs.bits else [False]*8
+            coils = list(res_coils.bits) if res_coils.bits else [False]*8
 
-            if inputs and len(inputs) >= 6:
-                # WICHTIG: Aktualisiert self.latest_inputs für die Schleifen in def run()
-                self.latest_inputs = inputs
-                
-                # UI über den aktuellen Status informieren
-                self.io_update_signal.emit(inputs, coils if coils else [False]*8)
+            if len(inputs) >= 6:
+                self.latest_inputs = inputs # Speichert die saubere Liste im Thread
+                self.io_update_signal.emit(inputs, coils)
 
                 # Sicherheits-Check: Motorschutz (Index 0)
                 if not inputs[0]:
@@ -60,10 +58,11 @@ class DriveThread(QThread):
 
                 return True
 
-            raise Exception("Kommunikationsfehler: Ungültige IO-Daten empfangen")
+            raise Exception("Kommunikationsfehler: Ungültige IO-Daten")
 
         except Exception as e:
             raise Exception(f"Sicherheitsabbruch: {str(e)}")
+
 
 
     def run(self):
