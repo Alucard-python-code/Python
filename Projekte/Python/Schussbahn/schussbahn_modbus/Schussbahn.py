@@ -262,10 +262,16 @@ class SchussbahnApp(QWidget):
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        # NEU: Prüfen und verbinden via .connected und .connect()
-        if not self.client.connected: 
-            self.client.connect()
+        # NEU: Try-Block schützt vor dem Einfrieren der GUI bei Netzwerkproblemen
+        try:
+            if not self.client.connected: 
+                self.client.connect()
+        except Exception as e:
+            self.update_ui_connectivity(False)
+            self.handle_system_error(f"FEHLER: Modbus-Verbindungsfehler! {e}")
+            return
 
+        # Prüfen, ob die Verbindung wirklich steht
         if not self.client.connected:
             self.update_ui_connectivity(False)
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen!")
@@ -273,23 +279,21 @@ class SchussbahnApp(QWidget):
 
         self.update_ui_connectivity(True)
 
-        # NEU: .write_coils() statt .write_multiple_coils() mit device_id=1
+        # Ausgänge nullen mit device_id=1
         res_coils = self.client.write_coils(0, [False] * 8, device_id=1)
         if res_coils.isError():
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
             return
 
-        # NEU: .read_discrete_inputs() mit device_id=1
+        # Eingänge lesen mit device_id=1
         res_inputs = self.client.read_discrete_inputs(0, 8, device_id=1)
         if res_inputs.isError():
             self.handle_system_error("FEHLER: Eingänge konnten nicht gelesen werden!")
             return
         
-        # NEU: Die gelesenen Bits liegen bei pymodbus im Feld .bits
         inputs = res_inputs.bits
-
-
         self.latest_inputs = inputs
+        
         if not inputs[0]: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst (In1=0)!")
         elif any(inputs[2:6]): 
@@ -310,44 +314,45 @@ class SchussbahnApp(QWidget):
                 self.start_drive("HomeFahrt")
 
     def cyclic_monitor(self):
-        # Wenn gerade eine Fahrt aktiv ist, Unterbrechung der zyklischen Überwachung
         if self.is_driving: 
             return
 
-        # --- RECONNECT LOGIK ---
-        # Prüfen, ob die Verbindung steht. Falls nicht, Reconnect versuchen.
-        if not self.client.is_open:
-            if not self.client.open():
-                # Status-UI für den Fehlerfall
-                self.status_msg.setText("FEHLER: Modbus Verbindung verloren! (Reconnect...)")
-                self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
-                self.update_ui_connectivity(False)
-                self.btn_beschuss.setEnabled(False)
-                self.btn_wertung.setEnabled(False)
-                return # Nächster Versuch beim nächsten Timer-Tick
-        # -----------------------
+        # NEU: .connected statt .is_open
+        if not self.client.connected:
+            try:
+                self.client.connect()
+            except:
+                pass
+            
+            self.status_msg.setText("FEHLER: Modbus Verbindung verloren! (Reconnect...)")
+            self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
+            self.update_ui_connectivity(False)
+            self.btn_beschuss.setEnabled(False)
+            self.btn_wertung.setEnabled(False)
+            return 
 
-        # Modbus-Daten abrufen
-        inputs = self.client.read_discrete_inputs(0, 8)
-        coils = self.client.read_coils(0, 8)
+        # NEU: Zyklischer Abruf via pymodbus mit device_id=1
+        res_inputs = self.client.read_discrete_inputs(0, 8, device_id=1)
+        res_coils = self.client.read_coils(0, 8, device_id=1)
 
-        # Validierung der Antwort
-        if not inputs or len(inputs) < 6:
+        # Prüfen, ob das Waveshare-Board fehlerhafte Daten geliefert hat
+        if res_inputs.isError() or res_coils.isError():
             self.status_msg.setText("FEHLER: Modbus Daten ungültig!")
             self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
-            
-            # Bei ungültigen Daten Verbindung schließen, um sauberen Reconnect zu erzwingen
-            try: self.client.close()
-            except: pass
             return
 
-        self.update_ui_connectivity(True)
+        # NEU: Daten aus dem .bits Feld extrahieren
+        inputs = res_inputs.bits
+        coils = res_coils.bits
 
-        # Daten zuweisen
+        self.update_ui_connectivity(True)
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
+        
+        # ... (Ab hier bleibt deine restliche Logik im cyclic_monitor unverändert)
+
 
         # Systemfehler-Prüfung
         if self.system_fault:
