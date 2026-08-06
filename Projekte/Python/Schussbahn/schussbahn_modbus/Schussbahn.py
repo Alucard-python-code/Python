@@ -110,7 +110,7 @@ class SchussbahnApp(QWidget):
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
                 return False
 
-            self.client.write_coils(0, [False] * 8, device_id=1)
+            self.client.write_coils( 0, values=[False] * 8, device_id=1)
 
             self.exit_requested = False
             self.ist_referenziert = False  # Löscht den Referenzstatus -> Zwingt nächste Fahrt zu Langsamlauf
@@ -280,13 +280,13 @@ class SchussbahnApp(QWidget):
         self.update_ui_connectivity(True)
 
         # Ausgänge nullen mit device_id=1
-        res_coils = self.client.write_coils(address=0, values=[False] * 8, device_id=1)
+        res_coils = self.client.write_coils( 0, values=[False] * 8, device_id=1)
         if res_coils.isError():
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
             return
 
         # Eingänge lesen mit device_id=1
-        res_inputs = self.client.read_discrete_inputs(address=0, count=8, device_id=1)
+        res_inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
         if res_inputs.isError():
             self.handle_system_error("FEHLER: Eingänge konnten nicht gelesen werden!")
             return
@@ -309,7 +309,7 @@ class SchussbahnApp(QWidget):
             else: 
                 self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
-                self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
+                self.client.write_coils( 0, values=[False] * 8, device_id=1)
                 time.sleep(0.3) 
                 self.start_drive("HomeFahrt")
 
@@ -332,8 +332,8 @@ class SchussbahnApp(QWidget):
             return 
 
         # NEU: Zyklischer Abruf via pymodbus mit device_id=1
-        res_inputs = self.client.read_discrete_inputs(address=0, count=8, device_id=1)
-        res_coils = self.client.read_coils(address=0, count=8, device_id=1)
+        res_inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
+        res_coils = self.client.read_coils( 0, count=8, device_id=1)
 
         # Prüfen, ob das Waveshare-Board fehlerhafte Daten geliefert hat
         if res_inputs.isError() or res_coils.isError():
@@ -358,7 +358,7 @@ class SchussbahnApp(QWidget):
         if self.system_fault:
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
-            try: self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
+            try: self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
             except: pass
             return 
 
@@ -524,7 +524,7 @@ class SchussbahnApp(QWidget):
         try:
             if not self.client.is_open:
                 raise Exception("Keine Verbindung")
-            self.client.write_single_coil(address=7, value=state, device_id=1)
+            self.client.write_single_coil( 7, value=state, device_id=1)
             # Nach Erfolg wieder freigeben
             QTimer.singleShot(500, lambda: self.update_ui_connectivity(True))
         except Exception as e:
@@ -556,7 +556,7 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'settings_window') and self.settings_window is not None: 
             self.settings_window.close()
         try: 
-            self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
+            self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
             self.client.close()
         except: 
             pass
@@ -605,7 +605,7 @@ class SchussbahnApp(QWidget):
                 self.drive_thread.wait()
             
             # SPS-Ausgänge auf Null setzen
-            self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
+            self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
         except Exception as e:
             logging.error(f"Fehler beim Stoppen des Tipp-Modus: {e}")
             
@@ -668,7 +668,7 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'animation_timer') and self.animation_timer.isActive():
             self.animation_timer.stop()
         try:
-            inputs = self.client.read_discrete_inputs(address=0, count=8, device_id=1)
+            inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
             if inputs and len(inputs) >= 2 and inputs[1]:
                 self.track_bar.setValue(0)
                 self.moving_target.move(0, -3) 

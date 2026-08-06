@@ -1,0 +1,7 @@
+[
+    "[06.08.2026 20:09:09] ModbusClientMixin.read_discrete_inputs() takes 2 positional arguments but 3 were given",
+    "[06.08.2026 20:08:51] ModbusClientMixin.read_discrete_inputs() takes 2 positional arguments but 3 were given",
+    "[06.08.2026 20:06:41] Motorschutzschalter ausgelöst (In1=0)!",
+    "[06.08.2026 20:06:09] Modbus-Verbindung fehlgeschlagen!",
+    "[06.08.2026 20:05:47] Modbus-Verbindung fehlgeschlagen!"
+]
