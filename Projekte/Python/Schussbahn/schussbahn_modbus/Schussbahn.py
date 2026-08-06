@@ -104,7 +104,7 @@ class SchussbahnApp(QWidget):
             self.times = load_settings() 
             neue_ip = self.times.get("Modbus-IP", "192.168.8.203")
             self.client.host = neue_ip 
-            self.client.msg_type = 2
+            self.client.mode = 2
 
             if not self.client.open():
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
