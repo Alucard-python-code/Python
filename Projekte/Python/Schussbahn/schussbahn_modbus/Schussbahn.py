@@ -51,7 +51,15 @@ class SchussbahnApp(QWidget):
         # Port auf 502 standardisiert bzw. deinen ursprünglichen Zustand beibehalten, Timeout kurz gehalten
         self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.1, framer=FramerType.RTU)
         self.client.connect()
-        
+                # Erwirkt, dass Sockets nach dem Schließen sofort wiederverwendet werden dürfen (Verhindert TIME_WAIT Hänger)
+        try:
+            import socket
+            if self.client.socket:
+                self.client.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                self.client.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        except:
+            pass
+
         # UI-Fixierung für exakt 1024x600 px
         self.setFixedSize(1024, 600)
         self.init_ui()

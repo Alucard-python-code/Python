@@ -24,3 +24,7 @@
 2026-08-06 20:45:48,602 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
 2026-08-06 20:45:48,797 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
 2026-08-06 20:45:49,801 - ERROR - Repeating....
+2026-08-06 20:51:00,295 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:51:00,295 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
+2026-08-06 20:51:00,503 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
+2026-08-06 20:51:01,526 - ERROR - Repeating....
