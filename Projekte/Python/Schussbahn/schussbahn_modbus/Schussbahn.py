@@ -331,24 +331,7 @@ class SchussbahnApp(QWidget):
 
 
     def cyclic_monitor(self):
-        if self.is_driving: 
-            return
-
-        current_millis = time.time() * 1000
-        current_seconds = time.time()
-
-        # --- PREVENTIVE TIMEOUT RESET (Alle 5 Minuten im Leerlauf neu verbinden) ---
-        # Wenn das System 5 Minuten (300 Sek.) am Stück ununterbrochen verbunden war,
-        # trennen wir die Verbindung im Leerlauf einmal kurz für 20ms freiwillig.
-        # Das setzt den 10-Minuten-Abschalt-Timer des Waveshare-Boards kontrolliert auf Null zurück!
-        if self.client.connected and (current_seconds - self.last_successful_read > 60):
-            try:
-                self.client.close()
-                time.sleep(0.02)
-                self.client.connect()
-                self.last_successful_read = current_seconds
-            except:
-                pass
+        current_millis = time.time() * 1000  # Aktuelle Zeit in Millisekunden
 
         # --- AUTO-RECONNECT IM HALBSEKUNDEN-TAKT ---
         if not self.client.connected:
@@ -369,8 +352,26 @@ class SchussbahnApp(QWidget):
             return 
         # ----------------------------------------
 
+        # --- AKTIVER 0,5-SEKUNDEN-HEARTBEAT AN RELAIS 5 ---
+        # Da der cyclic_monitor alle 250ms läuft, blinkt Relais 5 bei jedem 2. Durchlauf (500ms / 0,5s)
+        if self.client.connected:
+            self.heartbeat_counter += 1
+            if self.heartbeat_counter >= 2:
+                self.heartbeat_counter = 0
+                self.heartbeat_state = not self.heartbeat_state  # Zustand invertieren (True/False)
+                try:
+                    # Schaltet Relais 5 (Kanal 5) auf den neuen Zustand
+                    self.client.write_coil(5, value=self.heartbeat_state, device_id=1)
+                except Exception as e:
+                    logging.error(f"Heartbeat-Schreibfehler an Relais 5: {e}")
+        # --------------------------------------------------
+
+        # Wenn der Wagen aktiv fährt, überspringen wir die normale IO-Zustandsprüfung der GUI
+        if self.is_driving: 
+            return
+
+        # Sichere Datenabfrage der restlichen Schaltschrank-Zustände im Stillstand
         try:
-            # NEU: Wir setzen den Lese-Befehlen kein starres Limit, aktualisieren aber den Zeitstempel
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
             res_coils = self.client.read_coils(0, count=8, device_id=1)
 
@@ -379,10 +380,6 @@ class SchussbahnApp(QWidget):
 
             inputs = res_inputs.bits
             coils = res_coils.bits
-            
-            # Bei erfolgreichem Lesen den Timer für das kontrollierte Zurücksetzen aktualisieren
-            if not self.system_fault:
-                self.last_successful_read = current_seconds
 
         except Exception as e:
             logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
@@ -391,7 +388,8 @@ class SchussbahnApp(QWidget):
             except:
                 pass
             return
-        # Ab hier läuft Ihre normale, bestehende Auswertungslogik weiter
+
+        # Ab hier folgt dein ganz normaler Auswertungscode (self.update_ui_connectivity(True) etc.)
         self.update_ui_connectivity(True)
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
@@ -407,7 +405,7 @@ class SchussbahnApp(QWidget):
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
-        if inputs[1]: 
+        if inputs[1]:  # Wenn Start-Endschalter belegt
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(True)
