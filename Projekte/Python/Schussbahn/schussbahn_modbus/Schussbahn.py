@@ -271,14 +271,14 @@ class SchussbahnApp(QWidget):
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        # Versuche eine Initialverbindung ohne Blockieren der GUI
+        # 1. Sicherer Verbindungsversuch beim App-Start
         try:
             if not self.client.connected: 
                 self.client.connect()
-        except:
-            pass
+        except Exception as e:
+            logging.error(f"Modbus-Verbindungsfehler beim Booten: {e}")
 
-        # Falls der Modbus offline ist, crashen wir nicht, sondern starten den Monitor
+        # Falls die SPS beim Einschalten noch offline ist, fangen wir das hier ab
         if not self.client.connected:
             self.update_ui_connectivity(False)
             self.status_msg.setText("START-WARNUNG: Modbus offline! Warte auf SPS...")
@@ -286,34 +286,35 @@ class SchussbahnApp(QWidget):
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
             
-            # WICHTIG: Timer trotzdem starten, damit die obere Reconnect-Logik anspringt!
+            # WICHTIG: Timer trotzdem starten, damit die Reconnect-Schleife im Hintergrund sucht!
             self.central_monitor_timer.start(250)
             return
 
         self.update_ui_connectivity(True)
 
+        # 2. Ausgänge und Eingänge beim Start abfragen (mit try-except gegen Absturz gesichert!)
         try:
             res_coils = self.client.write_coils(0, values=[False] * 8, device_id=1)
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
             
             if res_coils.isError() or res_inputs.isError():
-                raise Exception("Start-Paketfehler")
+                raise Exception("Fehlerantwort von der Hardware erhalten")
                 
             inputs = res_inputs.bits
             self.latest_inputs = inputs
-        except:
-            # Falls beim allerersten Schreibversuch die SPS wegbricht
-            self.handle_system_error(f"FEHLER: Modbus-Timeout bei der Start-Initialisierung! ({e})")
+        except Exception as e:
+            logging.error(f"Timeout/Absturz beim ersten Modbus-Check abgefangen: {e}")
             self.client.close()
             self.central_monitor_timer.start(250)
             return
 
-        # Ab hier bleibt Ihre ursprüngliche Schutzschalter/Start-Logik erhalten
+        # 3. Auswertung der Endschalter beim allerersten Start
         if not inputs or len(inputs) < 2: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst (In1=0)!")
         elif any(inputs[2:6]): 
             self.handle_system_error("FEHLER: Schütze nicht in Nullstellung!")
         else:
+            # KLARSTELLUNG: inputs[1] ist die korrekte Python-Syntax für den Start-Endschalter
             if inputs[1]: 
                 self.status_msg.setText("zur Auswertung bereit")
                 self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
@@ -705,9 +706,12 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'animation_timer') and self.animation_timer.isActive():
             self.animation_timer.stop()
         try:
+            # Abfrage der aktuellen Endschalter-Zustände nach der Fahrt
             res = self.client.read_discrete_inputs(0, count=8, device_id=1)
-            if not res.isError() and res.bits:
-                # KORREKTUR: Prüft explizit den Start-Endschalter an Position Index 1
+            
+            if not res.isError() and res.bits and len(res.bits) > 1:
+                # REPARATUR: res.bits[1] fragt exakt den Wert an Index 1 der Liste ab (True/False)
+                # Das verhindert den fatalen Listen-Typfehler an der Schranke!
                 if res.bits[1]:
                     self.track_bar.setValue(0)
                     self.moving_target.move(0, -3) 
