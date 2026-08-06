@@ -705,12 +705,15 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'animation_timer') and self.animation_timer.isActive():
             self.animation_timer.stop()
         try:
-            inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
-            if inputs and len(inputs) >= 2 and inputs[1]:
-                self.track_bar.setValue(0)
-                self.moving_target.move(0, -3) 
-        except:
-            pass
+            res = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            if not res.isError() and res.bits:
+                # KORREKTUR: Prüft explizit den Start-Endschalter an Position Index 1
+                if res.bits[1]:
+                    self.track_bar.setValue(0)
+                    self.moving_target.move(0, -3) 
+        except Exception as e:
+            logging.error(f"Fehler beim Stoppen der Animation: {e}")
+
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
