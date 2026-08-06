@@ -119,7 +119,7 @@ class SchussbahnApp(QWidget):
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
                 return False
 
-            self.client.write_coils( 0, values=[False] * 8, device_id=1)
+            self.client.write_coils( 0, values=[False] * 8,  slave=1)
 
             self.exit_requested = False
             self.ist_referenziert = False  # Löscht den Referenzstatus -> Zwingt nächste Fahrt zu Langsamlauf
@@ -294,8 +294,8 @@ class SchussbahnApp(QWidget):
 
         # 2. Ausgänge und Eingänge beim Start abfragen (mit try-except gegen Absturz gesichert!)
         try:
-            res_coils = self.client.write_coils(0, values=[False] * 8, device_id=1)
-            res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            res_coils = self.client.write_coils(0, values=[False] * 8,  slave=1)
+            res_inputs = self.client.read_discrete_inputs(0, count=8,  slave=1)
             
             if res_coils.isError() or res_inputs.isError():
                 raise Exception("Fehlerantwort von der Hardware erhalten")
@@ -325,7 +325,7 @@ class SchussbahnApp(QWidget):
             else: 
                 self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
-                try: self.client.write_coils(0, values=[False] * 8, device_id=1)
+                try: self.client.write_coils(0, values=[False] * 8,  slave=1)
                 except: pass
                 time.sleep(0.3) 
                 self.start_drive("HomeFahrt")
@@ -360,9 +360,9 @@ class SchussbahnApp(QWidget):
 
         # --- 2. SICHERE DATENABFRAGE IM STILLSTAND (try-except block) ---
         try:
-            res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            res_inputs = self.client.read_discrete_inputs(0, count=8,  slave=1)
             time.sleep(0.04) # 40ms Schutzpause für die serielle RTU-Verarbeitung im Waveshare!
-            res_coils = self.client.read_coils(0, count=8, device_id=1)
+            res_coils = self.client.read_coils(0, count=8,  slave=1)
 
             if res_inputs.isError() or res_coils.isError() or not res_inputs.bits:
                 raise Exception("Ungültiges oder leeres Modbus-Datenpaket erhalten")
@@ -386,7 +386,7 @@ class SchussbahnApp(QWidget):
             self.heartbeat_state = not self.heartbeat_state
             try:
                 time.sleep(0.04) # Kurze Pause nach dem Lesen, bevor wir schreiben
-                self.client.write_coil(5, value=self.heartbeat_state, device_id=1)
+                self.client.write_coil(5, value=self.heartbeat_state,  slave=1)
             except:
                 pass
         # ----------------------------------------------------
@@ -565,7 +565,7 @@ class SchussbahnApp(QWidget):
         try:
             if not self.client.is_open:
                 raise Exception("Keine Verbindung")
-            self.client.write_single_coil( 7, value=state, device_id=1)
+            self.client.write_single_coil( 7, value=state,  slave=1)
             # Nach Erfolg wieder freigeben
             QTimer.singleShot(500, lambda: self.update_ui_connectivity(True))
         except Exception as e:
@@ -597,7 +597,7 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'settings_window') and self.settings_window is not None: 
             self.settings_window.close()
         try: 
-            self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
+            self.client.write_multiple_coils( 0, values=[False] * 8,  slave=1)
             self.client.close()
         except: 
             pass
@@ -646,7 +646,7 @@ class SchussbahnApp(QWidget):
                 self.drive_thread.wait()
             
             # SPS-Ausgänge auf Null setzen
-            self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
+            self.client.write_multiple_coils( 0, values=[False] * 8,  slave=1)
         except Exception as e:
             logging.error(f"Fehler beim Stoppen des Tipp-Modus: {e}")
             
@@ -710,7 +710,7 @@ class SchussbahnApp(QWidget):
             self.animation_timer.stop()
         try:
             # Abfrage der aktuellen Endschalter-Zustände nach der Fahrt
-            res = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            res = self.client.read_discrete_inputs(0, count=8,  slave=1)
             
             if not res.isError() and res.bits and len(res.bits) > 1:
                 # REPARATUR: res.bits[1] fragt exakt den Wert an Index 1 der Liste ab (True/False)

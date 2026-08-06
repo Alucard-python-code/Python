@@ -24,8 +24,8 @@ class DriveThread(QThread):
 
     def write_hardware_coil(self, kanal, zustand):
         try:
-            # KORREKTUR: .write_coil() mit nackter Kanaladresse vorne und device_id=1
-            res = self.client.write_coil(kanal, value=zustand, device_id=1)
+            # KORREKTUR: .write_coil() mit nackter Kanaladresse vorne und  slave=1
+            res = self.client.write_coil(kanal, value=zustand,  slave=1)
             return not res.isError()
         except:
             return False
@@ -38,9 +38,9 @@ class DriveThread(QThread):
             raise Exception("Thread wurde manuell gestoppt")
 
         try:
-            res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            res_inputs = self.client.read_discrete_inputs(0, count=8,  slave=1)
             time.sleep(0.04) # Schutzpause für den Pi 5 / Waveshare Puffer
-            res_coils = self.client.read_coils(0, count=8, device_id=1)
+            res_coils = self.client.read_coils(0, count=8,  slave=1)
 
             if res_inputs.isError() or res_coils.isError():
                 raise Exception("Kommunikationsfehler: Fehlerantwort von Modbus")
@@ -133,8 +133,7 @@ class DriveThread(QThread):
                     # Sicherheitsnetz: Falls der Endschalter (Index 1) schon in der 
                     # Schnellphase getroffen wird, sofort abbrechen
                     # Prüft, ob die Liste geladen wurde und ob an Index 1 ein 'True' (Endschalter aktiv) steht
-                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
-                        if self.latest_inputs[1] == True:
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1 and self.latest_inputs[1] == True:
                             break
 
                     time.sleep(0.05)
