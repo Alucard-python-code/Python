@@ -110,7 +110,7 @@ class SchussbahnApp(QWidget):
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
                 return False
 
-            self.client.write_multiple_coils(0, [False] * 8)
+            self.client.write_coils(0, [False] * 8, device_id=1)
 
             self.exit_requested = False
             self.ist_referenziert = False  # Löscht den Referenzstatus -> Zwingt nächste Fahrt zu Langsamlauf
