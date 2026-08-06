@@ -280,7 +280,7 @@ class SchussbahnApp(QWidget):
         self.update_ui_connectivity(True)
 
         # Ausgänge nullen mit device_id=1
-        res_coils = self.client.write_coils(address=0, value=[False] * 8, device_id=1)
+        res_coils = self.client.write_coils(address=0, values=[False] * 8, device_id=1)
         if res_coils.isError():
             self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
             return
@@ -309,7 +309,7 @@ class SchussbahnApp(QWidget):
             else: 
                 self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
-                self.client.write_multiple_coils(address=0, value=[False] * 8, device_id=1)
+                self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
                 time.sleep(0.3) 
                 self.start_drive("HomeFahrt")
 
@@ -358,7 +358,7 @@ class SchussbahnApp(QWidget):
         if self.system_fault:
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
-            try: self.client.write_multiple_coils(address=0, value=[False] * 8, device_id=1)
+            try: self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
             except: pass
             return 
 
@@ -556,7 +556,7 @@ class SchussbahnApp(QWidget):
         if hasattr(self, 'settings_window') and self.settings_window is not None: 
             self.settings_window.close()
         try: 
-            self.client.write_multiple_coils(address=0, value=[False] * 8, device_id=1)
+            self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
             self.client.close()
         except: 
             pass
@@ -605,7 +605,7 @@ class SchussbahnApp(QWidget):
                 self.drive_thread.wait()
             
             # SPS-Ausgänge auf Null setzen
-            self.client.write_multiple_coils(address=0, value=[False] * 8, device_id=1)
+            self.client.write_multiple_coils(address=0, values=[False] * 8, device_id=1)
         except Exception as e:
             logging.error(f"Fehler beim Stoppen des Tipp-Modus: {e}")
             
