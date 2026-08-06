@@ -43,7 +43,7 @@ class SchussbahnApp(QWidget):
         self.reconnect_counter = 0 # Neuer Zähler in __init__
         self.wartung_popup_gezeigt = False
         self.last_reconnect_attempt = 0  # Zeitstempel für den Sekunden-Takt
-
+        self.last_successful_read = time.time()
         # Nach dem Einschalten der App steht der Schlitten irgendwo -> noch nicht referenziert!
         self.ist_referenziert = False
 
@@ -334,22 +334,33 @@ class SchussbahnApp(QWidget):
         if self.is_driving: 
             return
 
-        current_millis = time.time() * 100 # Aktuelle Zeit in Millisekunden
+        current_millis = time.time() * 1000
+        current_seconds = time.time()
 
-        # --- AUTO-RECONNECT IM SEKUNDEN-TAKT ---
+        # --- PREVENTIVE TIMEOUT RESET (Alle 5 Minuten im Leerlauf neu verbinden) ---
+        # Wenn das System 5 Minuten (300 Sek.) am Stück ununterbrochen verbunden war,
+        # trennen wir die Verbindung im Leerlauf einmal kurz für 20ms freiwillig.
+        # Das setzt den 10-Minuten-Abschalt-Timer des Waveshare-Boards kontrolliert auf Null zurück!
+        if self.client.connected and (current_seconds - self.last_successful_read > 300):
+            try:
+                self.client.close()
+                time.sleep(0.02)
+                self.client.connect()
+                self.last_successful_read = current_seconds
+            except:
+                pass
+
+        # --- AUTO-RECONNECT IM HALBSEKUNDEN-TAKT ---
         if not self.client.connected:
-            # Nur alle 1000 ms (1 Sekunde) einen echten Reconnect-Versuch wagen,
-            # um die App und das Betriebssystem nicht mit Sockets zu blockieren.
-            if current_millis - self.last_reconnect_attempt >= 100:
+            if current_millis - self.last_reconnect_attempt >= 500:
                 self.last_reconnect_attempt = current_millis
                 try:
-                    self.client.close() # Alten Netzwerkpuffer sauber trennen
+                    self.client.close() 
                     time.sleep(0.02)
-                    self.client.connect() # Neu verbinden
+                    self.client.connect() 
                 except:
-                    pass # Fehlgeschlagener Versuch wird ignoriert, hält App am Leben
+                    pass
 
-            # UI sperren und Verbindungsverlust signalisieren
             self.status_msg.setText("FEHLER: Modbus Verbindung verloren! Suche Verbindung...")
             self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border: 1px solid #ffaa00; border-radius: 6px; font-weight: bold;")
             self.update_ui_connectivity(False)
@@ -358,28 +369,28 @@ class SchussbahnApp(QWidget):
             return 
         # ----------------------------------------
 
-        # Sichere Datenabfrage mittels try-except Block
         try:
+            # NEU: Wir setzen den Lese-Befehlen kein starres Limit, aktualisieren aber den Zeitstempel
             res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
             res_coils = self.client.read_coils(0, count=8, device_id=1)
 
-            # Prüfen, ob eine gültige Modbus-PDU-Antwort vorliegt
             if res_inputs.isError() or res_coils.isError():
                 raise Exception("Ungültiges Modbus-Datenpaket erhalten")
 
             inputs = res_inputs.bits
             coils = res_coils.bits
+            
+            # Bei erfolgreichem Lesen den Timer für das kontrollierte Zurücksetzen aktualisieren
+            if not self.system_fault:
+                self.last_successful_read = current_seconds
 
         except Exception as e:
-            # Falls beim Lesen der Socket stirbt (z.B. Kabel gezogen)
             logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
-            self.handle_system_error(f"FEHLER: Modbus-Timeout oder Verbindungsabbruch! ({e})")
             try:
-                self.client.close() # Erzwingt intern client.connected = False für den nächsten Tick
+                self.client.close() 
             except:
                 pass
             return
-
         # Ab hier läuft Ihre normale, bestehende Auswertungslogik weiter
         self.update_ui_connectivity(True)
         self.latest_inputs = inputs
