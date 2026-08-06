@@ -303,6 +303,7 @@ class SchussbahnApp(QWidget):
             self.latest_inputs = inputs
         except:
             # Falls beim allerersten Schreibversuch die SPS wegbricht
+            self.handle_system_error(f"FEHLER: Modbus-Timeout bei der Start-Initialisierung! ({e})")
             self.client.close()
             self.central_monitor_timer.start(250)
             return
@@ -372,6 +373,7 @@ class SchussbahnApp(QWidget):
         except Exception as e:
             # Falls beim Lesen der Socket stirbt (z.B. Kabel gezogen)
             logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
+            self.handle_system_error(f"FEHLER: Modbus-Timeout oder Verbindungsabbruch! ({e})")
             try:
                 self.client.close() # Erzwingt intern client.connected = False für den nächsten Tick
             except:
