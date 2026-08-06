@@ -8,7 +8,8 @@ import time
 from PyQt5.QtWidgets import*
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt, QTimer
-from pyModbusTCP.client import ModbusClient  # funktioniert nur mit raspi
+from pymodbus.client import FramerType
+from pymodbus.client import ModbusTcpClient as ModbusClient # funktioniert nur mit raspi
 
 from config_loader import load_settings, load_operating_hours, save_operating_hours, load_error_log, save_error_log, save_settings
 from ui_dialogs import SettingsWindow
@@ -47,8 +48,8 @@ class SchussbahnApp(QWidget):
 
         modbus_ip = self.times.get("Modbus-IP", "192.168.8.250")
         # Port auf 502 standardisiert bzw. deinen ursprünglichen Zustand beibehalten, Timeout kurz gehalten
-        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, auto_open=True, auto_close=False
-        self.client.mode = 2
+        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, framer=FramerType.RTU
+        self.client.connect()
         
         # UI-Fixierung für exakt 1024x600 px
         self.setFixedSize(1024, 600)
@@ -104,9 +105,8 @@ class SchussbahnApp(QWidget):
             self.times = load_settings() 
             neue_ip = self.times.get("Modbus-IP", "192.168.8.203")
             self.client.host = neue_ip 
-            self.client.mode = 2
 
-            if not self.client.open():
+            if not self.client.connect():
                 logging.error("System-Reset fehlgeschlagen: Modbus antwortet nicht.")
                 return False
 
