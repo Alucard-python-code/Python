@@ -2,3 +2,25 @@
 2026-08-06 20:05:47,036 - ERROR - Repeating....
 2026-08-06 20:06:07,983 - ERROR - Connection to (192.168.8.203, 502) failed: timed out
 2026-08-06 20:06:08,807 - ERROR - Repeating....
+2026-08-06 20:30:33,427 - ERROR - Fehler beim Lichtschalten: 'ModbusTcpClient' object has no attribute 'is_open'
+2026-08-06 20:30:34,237 - ERROR - Fehler beim Lichtschalten: 'ModbusTcpClient' object has no attribute 'is_open'
+2026-08-06 20:32:08,949 - ERROR - Fehler beim Lichtschalten: 'ModbusTcpClient' object has no attribute 'is_open'
+2026-08-06 20:32:10,876 - ERROR - Fehler beim Lichtschalten: 'ModbusTcpClient' object has no attribute 'is_open'
+2026-08-06 20:32:13,162 - ERROR - Fehler beim Lichtschalten: 'ModbusTcpClient' object has no attribute 'is_open'
+2026-08-06 20:34:04,934 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:41:28,100 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:41:28,100 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
+2026-08-06 20:41:28,650 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
+2026-08-06 20:41:29,644 - ERROR - Repeating....
+2026-08-06 20:41:48,129 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:41:48,129 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
+2026-08-06 20:41:48,870 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
+2026-08-06 20:41:49,901 - ERROR - Repeating....
+2026-08-06 20:44:32,427 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:44:32,427 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
+2026-08-06 20:44:33,155 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
+2026-08-06 20:44:34,149 - ERROR - Repeating....
+2026-08-06 20:45:48,602 - ERROR - No response received after 3 retries, continue with next request
+2026-08-06 20:45:48,602 - ERROR - Verbindungsabbruch waehrend zyklischer Abfrage: Modbus Error: [Input/Output] No response received after 3 retries, continue with next request
+2026-08-06 20:45:48,797 - ERROR - Connection to (192.168.8.250, 502) failed: timed out
+2026-08-06 20:45:49,801 - ERROR - Repeating....

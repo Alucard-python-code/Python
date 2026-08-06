@@ -42,13 +42,14 @@ class SchussbahnApp(QWidget):
         self.gui_error_list = load_error_log() 
         self.reconnect_counter = 0 # Neuer Zähler in __init__
         self.wartung_popup_gezeigt = False
+        self.last_reconnect_attempt = 0  # Zeitstempel für den Sekunden-Takt
 
         # Nach dem Einschalten der App steht der Schlitten irgendwo -> noch nicht referenziert!
         self.ist_referenziert = False
 
         modbus_ip = self.times.get("Modbus-IP", "192.168.8.250")
         # Port auf 502 standardisiert bzw. deinen ursprünglichen Zustand beibehalten, Timeout kurz gehalten
-        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.5, framer=FramerType.RTU)
+        self.client = ModbusClient(host=modbus_ip, port=502, timeout=0.1, framer=FramerType.RTU)
         self.client.connect()
         
         # UI-Fixierung für exakt 1024x600 px
@@ -262,39 +263,44 @@ class SchussbahnApp(QWidget):
         self.latest_coils = coils
 
     def startup_safety_check(self):
-        # NEU: Try-Block schützt vor dem Einfrieren der GUI bei Netzwerkproblemen
+        # Versuche eine Initialverbindung ohne Blockieren der GUI
         try:
             if not self.client.connected: 
                 self.client.connect()
-        except Exception as e:
-            self.update_ui_connectivity(False)
-            self.handle_system_error(f"FEHLER: Modbus-Verbindungsfehler! {e}")
-            return
+        except:
+            pass
 
-        # Prüfen, ob die Verbindung wirklich steht
+        # Falls der Modbus offline ist, crashen wir nicht, sondern starten den Monitor
         if not self.client.connected:
             self.update_ui_connectivity(False)
-            self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen!")
+            self.status_msg.setText("START-WARNUNG: Modbus offline! Warte auf SPS...")
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
+            self.btn_beschuss.setEnabled(False)
+            self.btn_wertung.setEnabled(False)
+            
+            # WICHTIG: Timer trotzdem starten, damit die obere Reconnect-Logik anspringt!
+            self.central_monitor_timer.start(250)
             return
 
         self.update_ui_connectivity(True)
 
-        # Ausgänge nullen mit device_id=1
-        res_coils = self.client.write_coils( 0, values=[False] * 8, device_id=1)
-        if res_coils.isError():
-            self.handle_system_error("FEHLER: Modbus-Verbindung fehlgeschlagen beim Start!")
+        try:
+            res_coils = self.client.write_coils(0, values=[False] * 8, device_id=1)
+            res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            
+            if res_coils.isError() or res_inputs.isError():
+                raise Exception("Start-Paketfehler")
+                
+            inputs = res_inputs.bits
+            self.latest_inputs = inputs
+        except:
+            # Falls beim allerersten Schreibversuch die SPS wegbricht
+            self.client.close()
+            self.central_monitor_timer.start(250)
             return
 
-        # Eingänge lesen mit device_id=1
-        res_inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
-        if res_inputs.isError():
-            self.handle_system_error("FEHLER: Eingänge konnten nicht gelesen werden!")
-            return
-        
-        inputs = res_inputs.bits
-        self.latest_inputs = inputs
-        
-        if not inputs[0]: 
+        # Ab hier bleibt Ihre ursprüngliche Schutzschalter/Start-Logik erhalten
+        if not inputs or len(inputs) < 2: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst (In1=0)!")
         elif any(inputs[2:6]): 
             self.handle_system_error("FEHLER: Schütze nicht in Nullstellung!")
@@ -309,65 +315,77 @@ class SchussbahnApp(QWidget):
             else: 
                 self.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
-                self.client.write_coils( 0, values=[False] * 8, device_id=1)
+                try: self.client.write_coils(0, values=[False] * 8, device_id=1)
+                except: pass
                 time.sleep(0.3) 
                 self.start_drive("HomeFahrt")
+
 
     def cyclic_monitor(self):
         if self.is_driving: 
             return
 
-        # NEU: .connected statt .is_open
+        current_millis = time.time() * 100 # Aktuelle Zeit in Millisekunden
+
+        # --- AUTO-RECONNECT IM SEKUNDEN-TAKT ---
         if not self.client.connected:
-            try:
-                self.client.connect()
-            except:
-                pass
-            
-            self.status_msg.setText("FEHLER: Modbus Verbindung verloren! (Reconnect...)")
-            self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
+            # Nur alle 1000 ms (1 Sekunde) einen echten Reconnect-Versuch wagen,
+            # um die App und das Betriebssystem nicht mit Sockets zu blockieren.
+            if current_millis - self.last_reconnect_attempt >= 100:
+                self.last_reconnect_attempt = current_millis
+                try:
+                    self.client.close() # Alten Netzwerkpuffer sauber trennen
+                    time.sleep(0.02)
+                    self.client.connect() # Neu verbinden
+                except:
+                    pass # Fehlgeschlagener Versuch wird ignoriert, hält App am Leben
+
+            # UI sperren und Verbindungsverlust signalisieren
+            self.status_msg.setText("FEHLER: Modbus Verbindung verloren! Suche Verbindung...")
+            self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border: 1px solid #ffaa00; border-radius: 6px; font-weight: bold;")
             self.update_ui_connectivity(False)
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
             return 
+        # ----------------------------------------
 
-        # NEU: Zyklischer Abruf via pymodbus mit device_id=1
-        res_inputs = self.client.read_discrete_inputs( 0, count=8, device_id=1)
-        res_coils = self.client.read_coils( 0, count=8, device_id=1)
+        # Sichere Datenabfrage mittels try-except Block
+        try:
+            res_inputs = self.client.read_discrete_inputs(0, count=8, device_id=1)
+            res_coils = self.client.read_coils(0, count=8, device_id=1)
 
-        # Prüfen, ob das Waveshare-Board fehlerhafte Daten geliefert hat
-        if res_inputs.isError() or res_coils.isError():
-            self.status_msg.setText("FEHLER: Modbus Daten ungültig!")
-            self.status_msg.setStyleSheet("color: #ff0000; background-color: #111111; padding: 6px; border: 1px solid red; border-radius: 6px;")
-            self.btn_beschuss.setEnabled(False)
-            self.btn_wertung.setEnabled(False)
+            # Prüfen, ob eine gültige Modbus-PDU-Antwort vorliegt
+            if res_inputs.isError() or res_coils.isError():
+                raise Exception("Ungültiges Modbus-Datenpaket erhalten")
+
+            inputs = res_inputs.bits
+            coils = res_coils.bits
+
+        except Exception as e:
+            # Falls beim Lesen der Socket stirbt (z.B. Kabel gezogen)
+            logging.error(f"Verbindungsabbruch waehrend zyklischer Abfrage: {e}")
+            try:
+                self.client.close() # Erzwingt intern client.connected = False für den nächsten Tick
+            except:
+                pass
             return
 
-        # NEU: Daten aus dem .bits Feld extrahieren
-        inputs = res_inputs.bits
-        coils = res_coils.bits
-
+        # Ab hier läuft Ihre normale, bestehende Auswertungslogik weiter
         self.update_ui_connectivity(True)
         self.latest_inputs = inputs
         self.latest_coils = coils if coils else [False]*8
-        
-        # ... (Ab hier bleibt deine restliche Logik im cyclic_monitor unverändert)
 
-
-        # Systemfehler-Prüfung
         if self.system_fault:
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(False)
-            try: self.client.write_multiple_coils( 0, values=[False] * 8, device_id=1)
+            try: self.client.write_coils(0, values=[False] * 8, device_id=1)
             except: pass
-            return 
+            return
 
-        # Hardware-Status-Prüfung
-        if not inputs[0]: 
+        if not inputs or len(inputs) < 2: 
             self.handle_system_error("FEHLER: Motorschutzschalter ausgelöst!")
             return
 
-        # UI-Update je nach Status
         if inputs[1]: 
             self.status_msg.setText("zur Auswertung bereit")
             self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding: 6px; border-radius: 6px;")
@@ -378,6 +396,7 @@ class SchussbahnApp(QWidget):
             self.status_msg.setStyleSheet("color: #ffff00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.btn_beschuss.setEnabled(False)
             self.btn_wertung.setEnabled(True)
+
 
     def update_ui_connectivity(self, is_connected):
         """Aktiviert/Deaktiviert die Licht-Buttons basierend auf dem Verbindungsstatus."""
