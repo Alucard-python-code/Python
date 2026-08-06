@@ -18,6 +18,9 @@ class DriveThread(QThread):
         self.ist_referenziert = ist_referenziert
         self._is_running = True
         self.latest_inputs = [] # Speicher für die zyklischen Schleifen
+        self.latest_inputs = []
+        self._is_running = True
+        self.last_gui_emit = 0  # NEU: Zeitstempel für den GUI-Schutzfilter
 
     def write_hardware_coil(self, kanal, zustand):
         try:
@@ -50,10 +53,15 @@ class DriveThread(QThread):
 
             if len(inputs) >= 6:
                 self.latest_inputs = inputs # Speichert die saubere Liste im Thread
-                self.io_update_signal.emit(inputs, coils)
+                # REPARATUR FÜR DEN PI 5: 
+                # Wir drosseln das Senden der Signale an die Grafikoberfläche auf maximal alle 200 ms.
+                # Das verhindert den fatalen Cross-Thread-Speichercrash (Segmentation Fault) an den Endschaltern!
+                current_time = time.time() * 1000
+                if current_time - self.last_gui_emit > 200:
+                    self.last_gui_emit = current_time
+                    self.io_update_signal.emit(inputs, coils)
 
-                # Sicherheits-Check: Motorschutz (Index 0)
-                if not inputs[0]:
+                if not inputs[0]: # Index 0 für den Motorschutz
                     raise Exception("Sicherheitskreis unterbrochen (Motorschutz)")
 
                 return True
