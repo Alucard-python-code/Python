@@ -103,7 +103,7 @@ class SchussbahnApp(QWidget):
             time.sleep(0.1)
 
             self.times = load_settings() 
-            neue_ip = self.times.get("Modbus-IP", "192.168.8.203")
+            neue_ip = self.times.get("Modbus-IP", "192.168.8.250")
             self.client.host = neue_ip 
 
             if not self.client.connect():
