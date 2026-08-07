@@ -11,7 +11,6 @@ from PyQt5.QtCore import QTimer, Qt
 from config_loader import load_settings, load_operating_hours, save_operating_hours, save_settings
 from ui_dialogs import SettingsWindow
 from drive_worker import DriveThread
-
 from ipc_client import IpcClient
 from time_tracker import TimeTracker
 from safety_manager import SafetyManager
