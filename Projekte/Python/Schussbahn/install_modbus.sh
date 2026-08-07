@@ -25,10 +25,15 @@ echo ""
 echo "-> Wechsle in Zielverzeichnis: $TARGET_DIR"
 cd "$TARGET_DIR"
 
-# 2. System-Pakete installieren
+# 2. System-Pakete installieren & automatische Updates sperren
 echo "-> Installiere System-Abhängigkeiten (Python3 venv, Qt5 & GPIO)..."
 sudo apt-get update -y
 sudo apt-get install -y python3-venv python3-pip python3-pyqt5 python3-gpiozero python3-lgpio
+
+echo "-> Deaktiviere automatische Hintergrund-Updates permanent..."
+sudo apt-get remove -y unattended-upgrades || true
+sudo systemctl stop apt-daily.timer apt-daily-upgrade.timer || true
+sudo systemctl disable apt-daily.timer apt-daily-upgrade.timer || true
 
 # 3. Virtuelle Umgebung für die App einrichten
 echo "-> Erstelle virtuelle Python-Umgebung..."
@@ -47,7 +52,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.transaction import ModbusRtuFramer
 
 HOST = "$HOST"
-PORT = $PORT
+PORT = $IN_PORT
 SLAVE_ID = 1
 IPC_HOST = "127.0.0.1"
 IPC_PORT = $IPC_PORT
@@ -232,6 +237,7 @@ echo " 2. Der Modbus-Hintergrunddienst läuft stabil."
 echo " 3. Der Kiosk-Autostart für labwc (Wayland) ist aktiv."
 echo " 4. Desktop-Icon wurde mit Grafik '$ICON_PATH' erstellt."
 echo " 5. PWM-Lüftersteuerung an GPIO 18 wurde eingerichtet."
+echo " 6. Automatische OS-Updates wurden dauerhaft blockiert."
 echo "======================================================"
 echo ""
 
