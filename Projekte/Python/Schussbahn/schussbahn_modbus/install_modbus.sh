@@ -47,7 +47,7 @@ from pymodbus.client import ModbusTcpClient
 from pymodbus.transaction import ModbusRtuFramer
 
 HOST = "$HOST"
-PORT = $IN_PORT
+PORT = $PORT
 SLAVE_ID = 1
 IPC_HOST = "127.0.0.1"
 IPC_PORT = $IPC_PORT
