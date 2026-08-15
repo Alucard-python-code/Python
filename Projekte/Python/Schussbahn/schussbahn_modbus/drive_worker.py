@@ -122,7 +122,7 @@ class DriveThread(QThread):
 
                 end_time_schnell = time.time() + self.times["Beschuss Schnell"]
                 while time.time() < end_time_schnell:
-                    check_watchdog()
+                    self.check_watchdog()
                     self.check_inputs_during_flight()
                     time.sleep(0.05)
 
@@ -131,7 +131,7 @@ class DriveThread(QThread):
 
                 end_time_langsam = time.time() + self.times["Beschuss Langsam"]
                 while time.time() < end_time_langsam:
-                    check_watchdog()
+                    self.check_watchdog()
                     self.check_inputs_during_flight()
                     time.sleep(0.05)
 
@@ -151,7 +151,7 @@ class DriveThread(QThread):
 
                 end_time_schnell = time.time() + self.times.get("Wertung Schnell", 2.5)
                 while time.time() < end_time_schnell:
-                    check_watchdog()
+                    self.check_watchdog()
                     self.check_inputs_during_flight()
 
                     if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1 and self.latest_inputs[1] == True:
@@ -163,7 +163,7 @@ class DriveThread(QThread):
                 self.status_signal.emit("Wertung: Langsamphase")
 
                 while self._is_running:
-                    check_watchdog()
+                    self.check_watchdog()
                     self.check_inputs_during_flight()
 
                     if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
@@ -184,7 +184,7 @@ class DriveThread(QThread):
                 self.write_hardware_coil(2, True)
 
                 while self._is_running:
-                    check_watchdog()
+                    self.check_watchdog()
                     self.check_inputs_during_flight()
 
                     if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
