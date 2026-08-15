@@ -87,7 +87,7 @@ def modbus_worker():
                 current_time = time.time()
                 if current_time - last_heartbeat_time >= 0.5:
                     heartbeat_state = not heartbeat_state
-                    client.write_coil(address=4, value=heartbeat_state, device_id=SLAVE_ID)
+                    client.write_coil(address=7, value=heartbeat_state, device_id=SLAVE_ID)
                     last_heartbeat_time = current_time
                 with data_lock:
                     current_relays = list(relay_write_list)
