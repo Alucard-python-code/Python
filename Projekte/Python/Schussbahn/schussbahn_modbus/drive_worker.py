@@ -163,7 +163,7 @@ class DriveThread(QThread):
                 self.status_signal.emit("Wertung: Langsamphase")
 
                 while self._is_running:
-                    self.check_watchdog()
+                    check_watchdog()
                     
                     # 1. Eingänge frisch vom Waveshare-Board abfragen
                     try:
