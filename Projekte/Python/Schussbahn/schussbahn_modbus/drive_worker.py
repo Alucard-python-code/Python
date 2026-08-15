@@ -163,13 +163,32 @@ class DriveThread(QThread):
                 self.status_signal.emit("Wertung: Langsamphase")
 
                 while self._is_running:
-                    check_watchdog()
-                    self.check_inputs_during_flight()
+                    self.check_watchdog()
+                    
+                    # 1. Eingänge frisch vom Waveshare-Board abfragen
+                    try:
+                        self.latest_inputs = self.communicate_with_backend(self.current_relays)
+                    except Exception as e:
+                        print(f"Modbus-Puffer fängt Waveshare-Fehler ab: {e}")
+                        time.sleep(0.05)
+                        continue
 
-                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
-                        if self.latest_inputs[1] == True:
+                    # 2. Sicherheits-Check: Motorschutz (Eingang 1 -> Index 0)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 0:
+                        if not self.latest_inputs[0]:  # Wenn der Motorschutz ausfällt (False)
+                            self.error_signal.emit("Kritisch: Motorschutz ausgelöst!")
                             break
-                    time.sleep(0.05)
+
+                    # 3. Fahr-Check: NUR Endschalter prüfen (Eingang 2 -> Index 1)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        # HIER SCHAUEN WIR STUR NUR AUF INDEX 1!
+                        # Index 2 (Schütz 3) wird absichtlich komplett ignoriert!
+                        if self.latest_inputs[1] == True: 
+                            print("Ziel erreicht: Endschalter (Eingang 2) hat ausgelöst.")
+                            break
+
+                    time.sleep(0.05)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
+
 
                 self.write_hardware_coil(1, False)
                 self.write_hardware_coil(2, False)
@@ -185,16 +204,31 @@ class DriveThread(QThread):
 
                 while self._is_running:
                     check_watchdog()
-                    self.check_inputs_during_flight()
+                    
+                    # 1. Eingänge frisch vom Waveshare-Board abfragen
+                    try:
+                        self.latest_inputs = self.communicate_with_backend(self.current_relays)
+                    except Exception as e:
+                        print(f"Modbus-Puffer fängt Waveshare-Fehler ab: {e}")
+                        time.sleep(0.05)
+                        continue
 
-                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
-                        if self.latest_inputs[1] == True:
+                    # 2. Sicherheits-Check: Motorschutz (Eingang 1 -> Index 0)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 0:
+                        if not self.latest_inputs[0]:  # Wenn der Motorschutz ausfällt (False)
+                            self.error_signal.emit("Kritisch: Motorschutz ausgelöst!")
                             break
-                    time.sleep(0.05)
 
-                self.write_hardware_coil(1, False)
-                self.write_hardware_coil(2, False)
-                self.communicate_with_backend([False, False, False, False])
+                    # 3. Fahr-Check: NUR Endschalter prüfen (Eingang 2 -> Index 1)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        # HIER SCHAUEN WIR STUR NUR AUF INDEX 1!
+                        # Index 2 (Schütz 3) wird absichtlich komplett ignoriert!
+                        if self.latest_inputs[1] == True: 
+                            print("Ziel erreicht: Endschalter (Eingang 2) hat ausgelöst.")
+                            break
+
+                        time.sleep(0.05)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
+
 
             self.drive_time_signal.emit(time.time() - start_time)
             self.finished_signal.emit()
