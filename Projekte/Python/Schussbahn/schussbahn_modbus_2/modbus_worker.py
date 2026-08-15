@@ -7,8 +7,8 @@ from pymodbus.client import ModbusTcpClient
 
 class ModbusWorker(QThread):
     """
-    Hintergrund-Thread für das Waveshare POE ETH Relay (B).
-    Nutzt deine funktionierenden Original-Befehle im absolut starren 100ms-Takt.
+    Hochstabiler Industrie-Hintergrund-Thread für das Waveshare POE ETH Relay (B).
+    Schreibt Ausgänge NUR bei echten Änderungen. Verhindert Bus-Kollaps vollständig.
     """
     data_updated = pyqtSignal(list, list)
 
@@ -23,6 +23,9 @@ class ModbusWorker(QThread):
         self.data_lock = threading.Lock()
         self.relay_write_list = [False] * 8
         self.inputs = [False] * 8
+        
+        # SPIEGEL-LISTE: Speichert den Zustand, der ZULETZT an die Hardware gesendet wurde
+        self.last_sent_relays = [False] * 8
 
     def update_outputs(self, new_outputs):
         with self.data_lock:
@@ -35,7 +38,7 @@ class ModbusWorker(QThread):
         while self.running:
             client = None
             try:
-                # Verbindung stabil im funktionierenden RTU-over-TCP Modus öffnen
+                # Verbindung im stabilen RTU-over-TCP Modus ("Transparent Mode") öffnen
                 client = ModbusTcpClient(
                     host=self.config['ip'], 
                     port=self.config['port'], 
@@ -51,11 +54,16 @@ class ModbusWorker(QThread):
                 last_heartbeat_time = 0
                 self.trigger_reconnect = False
                 
+                # Beim allerersten Verbindungsaufbau einmalig den aktuellen Zustand erzwingen
+                with self.data_lock:
+                    self.last_sent_relays = list(self.relay_write_list)
+                client.write_coils(address=0, values=self.last_sent_relays[:4], device_id=self.slave_id)
+                client.write_coil(address=7, value=self.last_sent_relays[7], device_id=self.slave_id)
+                
                 # Haupt-Kommunikationsschleife
                 while self.running and not self.trigger_reconnect:
                     cycle_start = time.time()
                     
-                    # INNERE SICHERHEITSSCHLEIFE: Fehler trennen NICHT den TCP-Socket!
                     try:
                         # ---- 1. HEARTBEAT / BLINKEN AUF CH6 (Adresse 4) ----
                         if cycle_start - last_heartbeat_time >= 0.5:
@@ -63,17 +71,21 @@ class ModbusWorker(QThread):
                             client.write_coil(address=4, value=heartbeat_state, device_id=self.slave_id)
                             last_heartbeat_time = cycle_start
                         
-                        # ---- 2. RELAIS SCHREIBEN (Deine funktionierenden Sammelbefehle) ----
+                        # ---- 2. SENDER-CHECK (Schreiben NUR bei echter Änderung) ----
                         with self.data_lock:
                             current_relays = list(self.relay_write_list)
                         
-                        # Schütze CH1-CH4 als Block schreiben
-                        client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
+                        # Prüfen, ob sich bei den Schützen CH1-CH4 etwas geändert hat
+                        if current_relays[:4] != self.last_sent_relays[:4]:
+                            client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
+                            self.last_sent_relays[:4] = current_relays[:4]
                         
-                        # KORREKTUR: index [7] hinzugefügt, da write_coil keine Liste akzeptiert!
-                        client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
+                        # Prüfen, ob sich das Licht CH8 (Index 7) geändert hat
+                        if current_relays[7] != self.last_sent_relays[7]:
+                            client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
+                            self.last_sent_relays[7] = current_relays[7]
 
-                        # ---- 3. HARDWARE-EINGÄNGE LESEN (Deine Original-Abfrage) ----
+                        # ---- 3. HARDWARE-EINGÄNGE LESEN (Standard-Poll) ----
                         rr = client.read_discrete_inputs(address=0, count=8, device_id=self.slave_id)
                         
                         if rr and not rr.isError():
@@ -83,7 +95,6 @@ class ModbusWorker(QThread):
                             current_outputs_for_gui = list(current_relays)
                             current_outputs_for_gui[4] = heartbeat_state  
                             
-                            # Daten flüssig an das PyQt5-Hauptfenster übermitteln
                             self.data_updated.emit(self.inputs, current_outputs_for_gui)
                         else:
                             if hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
@@ -93,8 +104,7 @@ class ModbusWorker(QThread):
                         if client and hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
                             client.framer.clear()
                     
-                    # DYNAMISCHES TIMING: Verhindert, dass der Takt "eiert".
-                    # Berechnet die exakte Dauer der Modbus-Befehle und füllt auf genau 100ms auf.
+                    # Dynamische Taktregelung auf exakt 100ms
                     elapsed = time.time() - cycle_start
                     sleep_time = max(0.01, 0.1 - elapsed)
                     time.sleep(sleep_time)
