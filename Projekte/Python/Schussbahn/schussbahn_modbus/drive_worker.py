@@ -30,21 +30,32 @@ class DriveThread(QThread):
         self.ipc_port = 65432
 
     def communicate_with_backend(self, relays_to_write):
-        """Sendet Relais-Zustände an das Backend und holt die 8 Eingänge ab."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.1) # Sehr kurzer Timeout, da lokal auf dem Pi
-                s.connect((self.ipc_host, self.ipc_port))
-                
-                payload = {"set_relays": relays_to_write}
-                s.sendall(json.dumps(payload).encode('utf-8'))
-                
-                response = s.recv(1024).decode('utf-8')
-                data = json.loads(response)
-                return data.get("inputs", [False] * 8)
-        except Exception as e:
-            # Wenn das Backend nicht antwortet, werfen wir einen Kommunikationsfehler
-            raise Exception(f"IPC-Hintergrunddienst nicht erreichbar: {e}")
+        """Sendet Relais-Zustände an das Backend und holt die 8 Eingänge ab (mit sicheren Retries)."""
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.15) # Leicht erhöht für stabilere Handshakes
+                    s.connect((self.ipc_host, self.ipc_port))
+                    
+                    payload = {"set_relays": relays_to_write}
+                    s.sendall(json.dumps(payload).encode('utf-8'))
+                    
+                    response = s.recv(1024).decode('utf-8')
+                    if not response:
+                        raise socket.error("Leere Antwort vom Server")
+                        
+                    data = json.loads(response)
+                    return data.get("inputs", [False] * 8)
+                    
+            except (socket.error, json.JSONDecodeError) as e:
+                # Bei schnellen Abfolgen kurz warten und erneut versuchen
+                if attempt < max_retries - 1:
+                    time.sleep(0.04) # 40ms Puffer geben, damit sich der Server fängt
+                    continue
+                else:
+                    # Erst nach dem 4. Fehlschlag werfen wir den Fehler
+                    raise Exception(f"IPC-Hintergrunddienst nicht erreichbar: {e}")
 
     def write_hardware_coil(self, kanal, zustand):
         """Setzt den Zustand für ein Relais im lokalen Array und sendet es."""
