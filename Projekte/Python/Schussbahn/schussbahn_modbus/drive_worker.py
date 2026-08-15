@@ -180,7 +180,7 @@ class DriveThread(QThread):
             # ====================================================================
             elif self.mode == "HomeFahrt":
                 self.write_hardware_coil(1, True)
-                time.sleep(0.1)
+                time.sleep(0.5)
                 self.write_hardware_coil(2, True)
 
                 while self._is_running:
