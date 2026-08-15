@@ -141,7 +141,13 @@ class SchussbahnApp(QWidget):
         self.ist_referenziert = True
         self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
         self.status_msg.setText("zur Auswertung bereit")
-        self.drive_finished()
+        # Rufe die Beendigung sauber auf:
+        self.animation.stop()
+        self.is_driving = False
+        if self.exit_requested: 
+            self.close_program_safely()
+        else: 
+            self.central_monitor_timer.start(250)
 
     def fahrt_abgebrochen_fehler(self, error_msg):
         self.blink_timer.stop()
