@@ -18,6 +18,7 @@ DEFAULT_SETTINGS = {
     "Bremszeit Rueckwaerts" : 0.5,
     "Watchdog Beschuss": 10.0,
     "Watchdog Wertung": 10.0,
+    "Watchdog HomeFahrt": 10.0,
     "Laufzeit Motor (min)": 0.0,
     "Wartung Intervall (min)": 500.0,
     "Service-PIN": 1234,
