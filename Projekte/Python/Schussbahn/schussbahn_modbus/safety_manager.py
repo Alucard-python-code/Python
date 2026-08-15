@@ -39,7 +39,7 @@ class SafetyManager:
                 self.app.status_msg.setText("Wagen nicht in Startposition! Bereite Home-Fahrt vor...")
                 self.app.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
                 time.sleep(0.3) 
-                self.app.start_drive("HomeFahrt")
+                #self.app.start_drive("HomeFahrt")
 
     def handle_system_error(self, message):
         """Sperrt die Anlage hart bei kritischen Fehlern und loggt diese."""
