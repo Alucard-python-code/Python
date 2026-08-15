@@ -37,7 +37,6 @@ class ModbusWorker(QThread):
             client = None
             try:
                 # Verbindung stabil im funktionierenden RTU-over-TCP Modus öffnen
-                # Niedriges Timeout verhindert das Einfrieren bei Paketverlust
                 client = ModbusTcpClient(
                     host=self.config['ip'], 
                     port=self.config['port'], 
@@ -57,7 +56,6 @@ class ModbusWorker(QThread):
                 while self.running and not self.trigger_reconnect:
                     loop_start = time.time()
                     
-                    # INNERE SICHERHEITSSCHLEIFE: Fehler trennen NICHT mehr den TCP-Socket!
                     try:
                         # ---- 1. HEARTBEAT / BLINKEN AUF CH6 (Adresse 4) ----
                         if loop_start - last_heartbeat_time >= 0.5:
@@ -65,17 +63,17 @@ class ModbusWorker(QThread):
                             client.write_coil(address=4, value=heartbeat_state, device_id=self.slave_id)
                             last_heartbeat_time = loop_start
                         
-                        # ---- 2. RELAIS SCHREIBEN (Deine funktionierenden Sammelbefehle) ----
+                        # ---- 2. RELAIS SCHREIBEN ----
                         with self.data_lock:
                             current_relays = list(self.relay_write_list)
                         
-                        # Schütze CH1-CH4 als Block schreiben (hocheffizient)
+                        # Schütze CH1-CH4 als Block schreiben
                         client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
                         
                         # Lichtkanal CH8 (Adresse 7) separat schreiben
                         client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
 
-                        # ---- 3. HARDWARE-EINGÄNGE LESEN (Deine Original-Abfrage) ----
+                        # ---- 3. HARDWARE-EINGÄNGE LESEN ----
                         rr = client.read_discrete_inputs(address=0, count=8, device_id=self.slave_id)
                         
                         if rr and not rr.isError():
@@ -88,21 +86,16 @@ class ModbusWorker(QThread):
                             # Daten flüssig an das PyQt5-Hauptfenster übermitteln
                             self.data_updated.emit(self.inputs, current_outputs_for_gui)
                         else:
-                            # CRC- oder Paketfehler: Wir flushen den Speicher, anstatt den Socket zu schließen!
                             if hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
                                 client.framer.clear()
                                 
                     except Exception:
-                        # Bei einer EMV-Störung durch Schütze: Puffer leeren, im nächsten Takt direkt weitermachen
                         if client and hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
                             client.framer.clear()
                     
-                    # Fester, starrer Takt von 100ms. Wenn ein Fehler auftritt, 
-                    # korrigiert sich das System nach exakt 100ms von alleine!
                     time.sleep(0.1)
                     
             except Exception:
-                # Nur bei Totalausfall (z.B. Kabel ab) greift diese Schutzpause
                 time.sleep(1.0)
             finally:
                 if client:

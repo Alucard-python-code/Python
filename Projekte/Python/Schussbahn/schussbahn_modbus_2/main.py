@@ -9,7 +9,6 @@ from PyQt5.QtCore import Qt
 from config import INPUT_ENDSCHALTER, OUTPUT_RECHTS, OUTPUT_LINKS, OUTPUT_LANGSAM, OUTPUT_SCHNELL, OUTPUT_LICHT
 from gui_base import Ui_SchlittenSteuerung
 from settings_dialog import SettingsDialog
-# KORREKTUR: FahrtWorker hier aus der control_logic mit-importieren!
 from control_logic import SchlittenLogik, FahrtWorker
 
 class SchlittenApp(Ui_SchlittenSteuerung):
@@ -100,7 +99,6 @@ class SchlittenApp(Ui_SchlittenSteuerung):
                 dialog.accept()
                 wd = self.logik.config['wd_homing']
                 
-                # KORREKTUR: Homing läuft jetzt ebenfalls über den flüssigen Hintergrund-Worker
                 self.h1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Homing / Referenzfahrt")
                 
                 def homing_beendet(erfolg, name):
@@ -135,11 +133,10 @@ class SchlittenApp(Ui_SchlittenSteuerung):
     def handle_beschuss(self):
         def ablauf():
             wd = self.logik.config['wd_beschuss']
-            # Startet Phase 1 (Schnell) im Hintergrund
             self.p1 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_SCHNELL, dauer=self.logik.config['b_schnell'], watchdog_limit=wd, fahrt_name="Beschuss")
             
             def starte_phase_2(erfolg, name):
-                if erfolg: # Wenn Schnell fertig, starte Langsam
+                if erfolg:
                     self.p2 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_LANGSAM, dauer=self.logik.config['b_langsam'], watchdog_limit=wd, fahrt_name="Beschuss")
                     self.p2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
                     self.p2.start()
@@ -152,7 +149,6 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         self.check_home_position(ablauf)
 
     def handle_auswertung(self):
-        # Sicherheitsblockade prüfen
         if not self.logik.homing_done:
             warning_dialog = QDialog(self)
             warning_dialog.setWindowTitle("Sicherheitssperre")
@@ -175,11 +171,10 @@ class SchlittenApp(Ui_SchlittenSteuerung):
             return
         
         wd = self.logik.config['wd_auswertung']
-        # Phase 1: Schnell zurück
         self.a1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_SCHNELL, dauer=self.logik.config['a_schnell'], watchdog_limit=wd, fahrt_name="Auswertung")
         
         def starte_auswertung_phase_2(erfolg, name):
-            if erfolg: # Wenn Schnell fertig, fahre Langsam bis zum Endschalter
+            if erfolg:
                 self.a2 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Auswertung")
                 self.a2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
                 self.a2.start()
@@ -197,7 +192,6 @@ class SchlittenApp(Ui_SchlittenSteuerung):
                 self.logik.worker.request_reconnect()
 
     def closeEvent(self, event):
-        # Logik und Threads ordentlich heruntenfahren
         self.logik.shutdown()
         event.accept()
 
