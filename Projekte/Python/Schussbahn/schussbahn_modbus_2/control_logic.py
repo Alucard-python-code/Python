@@ -1,15 +1,15 @@
 # control_logic.py
 
 import time
+import threading
 from PyQt5.QtCore import QObject, QThread, pyqtSignal
-
 from config import (INPUT_ENDSCHALTER, OUTPUT_RECHTS, OUTPUT_LINKS, 
                     OUTPUT_LANGSAM, OUTPUT_SCHNELL, load_stored_config)
 from modbus_worker import ModbusWorker
 
 class FahrtWorker(QThread):
-    """Führt die Fahrten in einem echten, autarken Hintergrund-Thread auf dem Pi aus."""
-    fahrt_beendet = pyqtSignal(bool, str) # Signalisiert der GUI Erfolg oder Watchdog-Fehler
+    """Führt die Fahrten autark im Hintergrund aus, ohne den Modbus-Takt zu stören."""
+    fahrt_beendet = pyqtSignal(bool, str)
 
     def __init__(self, logik, richtung_ch, speed_ch, dauer=None, stop_am_endschalter=False, watchdog_limit=None, fahrt_name=""):
         super().__init__()
@@ -47,7 +47,10 @@ class FahrtWorker(QThread):
                     break
                 if self.dauer and (time.time() - start_phase >= self.dauer):
                     break
-                QThread.msleep(20) # Schont die CPU des Raspberry Pi im Gegensatz zu processEvents()
+                
+                # KORREKTUR: Taktung in der Überwachungsschleife auf 40ms erhöht.
+                # Das entlastet die CPU des Raspberry Pi drastisch.
+                QThread.msleep(40)
 
             # --- PHASE 3: STOPP ---
             if self.speed_ch is not None:
@@ -58,7 +61,7 @@ class FahrtWorker(QThread):
             self.logik.outputs[self.richtung_ch] = False
             self.logik.worker.update_outputs(self.logik.outputs)
             
-            self.fahrt_beendet.emit(True, self.fahrt_name) # Fahrt erfolgreich
+            self.fahrt_beendet.emit(True, self.fahrt_name)
             
         except Exception:
             self.NOT_AUS()
