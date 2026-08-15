@@ -187,7 +187,7 @@ class DriveThread(QThread):
                             print("Ziel erreicht: Endschalter (Eingang 2) hat ausgelöst.")
                             break
 
-                    time.sleep(0.05)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
+                    time.sleep(0.1)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
 
 
                 self.write_hardware_coil(1, False)
