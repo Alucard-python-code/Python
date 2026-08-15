@@ -9,7 +9,8 @@ from PyQt5.QtCore import Qt
 from config import INPUT_ENDSCHALTER, OUTPUT_RECHTS, OUTPUT_LINKS, OUTPUT_LANGSAM, OUTPUT_SCHNELL, OUTPUT_LICHT
 from gui_base import Ui_SchlittenSteuerung
 from settings_dialog import SettingsDialog
-from control_logic import SchlittenLogik
+# KORREKTUR: FahrtWorker hier aus der control_logic mit-importieren!
+from control_logic import SchlittenLogik, FahrtWorker
 
 class SchlittenApp(Ui_SchlittenSteuerung):
     def __init__(self):
@@ -74,6 +75,11 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         
         alarm.exec_()
 
+    def handle_fahrt_ergebnis(self, erfolg, fahrt_name):
+        """Wird aufgerufen, sobald ein Fahrsegment beendet wurde (Erfolg oder Alarm)."""
+        if not erfolg:
+            self.show_watchdog_alarm(fahrt_name)
+
     def check_home_position(self, callback_funktion):
         """Überprüft die Home-Position. Falls nicht dort, wird Homing erzwungen."""
         if not self.logik.inputs[INPUT_ENDSCHALTER]:
@@ -92,32 +98,32 @@ class SchlittenApp(Ui_SchlittenSteuerung):
             
             def starte_homing():
                 dialog.accept()
-                start_homing_zeit = time.time()
-                erfolg = self.logik.fahrt_sequenz(
-                    richtung_ch=OUTPUT_LINKS, 
-                    speed_ch=OUTPUT_LANGSAM, 
-                    stop_am_endschalter=True,
-                    start_zeit_gesamt=start_homing_zeit,
-                    watchdog_limit=self.logik.config['wd_homing']
-                )
+                wd = self.logik.config['wd_homing']
                 
-                if erfolg:
-                    self.logik.homing_done = True
-                    info = QDialog(self)
-                    info.setWindowTitle("Bereit")
-                    info.setFixedSize(250, 100)
-                    info.setStyleSheet("background-color: #1e1e1e; color: white;")
-                    ivbox = QVBoxLayout(info)
-                    ilbl = QLabel("Referenzfahrt abgeschlossen.\nSystem ist jetzt bereit!")
-                    ilbl.setAlignment(Qt.AlignCenter)
-                    ibtn = QPushButton("OK")
-                    ibtn.setStyleSheet("background-color: #2e7d32; padding: 4px; color: white;")
-                    ibtn.clicked.connect(info.accept)
-                    ivbox.addWidget(ilbl)
-                    ivbox.addWidget(ibtn)
-                    info.exec_()
-                else:
-                    self.show_watchdog_alarm("Homing / Referenzfahrt")
+                # KORREKTUR: Homing läuft jetzt ebenfalls über den flüssigen Hintergrund-Worker
+                self.h1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Homing / Referenzfahrt")
+                
+                def homing_beendet(erfolg, name):
+                    if erfolg:
+                        self.logik.homing_done = True
+                        info = QDialog(self)
+                        info.setWindowTitle("Bereit")
+                        info.setFixedSize(250, 100)
+                        info.setStyleSheet("background-color: #1e1e1e; color: white;")
+                        ivbox = QVBoxLayout(info)
+                        ilbl = QLabel("Referenzfahrt abgeschlossen.\nSystem ist jetzt bereit!")
+                        ilbl.setAlignment(Qt.AlignCenter)
+                        ibtn = QPushButton("OK")
+                        ibtn.setStyleSheet("background-color: #2e7d32; padding: 4px; color: white;")
+                        ibtn.clicked.connect(info.accept)
+                        ivbox.addWidget(ilbl)
+                        ivbox.addWidget(ibtn)
+                        info.exec_()
+                    else:
+                        self.show_watchdog_alarm(name)
+
+                self.h1.fahrt_beendet.connect(homing_beendet)
+                self.h1.start()
 
             btn.clicked.connect(starte_homing)
             vbox.addWidget(btn)
@@ -128,31 +134,20 @@ class SchlittenApp(Ui_SchlittenSteuerung):
 
     def handle_beschuss(self):
         def ablauf():
-            start_beschuss_zeit = time.time()
             wd = self.logik.config['wd_beschuss']
+            # Startet Phase 1 (Schnell) im Hintergrund
+            self.p1 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_SCHNELL, dauer=self.logik.config['b_schnell'], watchdog_limit=wd, fahrt_name="Beschuss")
             
-            # Phase 1: Schnell fahr auf Zeit
-            ok = self.logik.fahrt_sequenz(
-                richtung_ch=OUTPUT_RECHTS, 
-                speed_ch=OUTPUT_SCHNELL, 
-                dauer=self.logik.config['b_schnell'],
-                start_zeit_gesamt=start_beschuss_zeit,
-                watchdog_limit=wd
-            )
-            if not ok:
-                self.show_watchdog_alarm("Beschuss")
-                return
-                
-            # Phase 2: Langsam weiterfahren auf Zeit
-            ok = self.logik.fahrt_sequenz(
-                richtung_ch=OUTPUT_RECHTS, 
-                speed_ch=OUTPUT_LANGSAM, 
-                dauer=self.logik.config['b_langsam'],
-                start_zeit_gesamt=start_beschuss_zeit,
-                watchdog_limit=wd
-            )
-            if not ok:
-                self.show_watchdog_alarm("Beschuss")
+            def starte_phase_2(erfolg, name):
+                if erfolg: # Wenn Schnell fertig, starte Langsam
+                    self.p2 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_LANGSAM, dauer=self.logik.config['b_langsam'], watchdog_limit=wd, fahrt_name="Beschuss")
+                    self.p2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
+                    self.p2.start()
+                else:
+                    self.show_watchdog_alarm(name)
+
+            self.p1.fahrt_beendet.connect(starte_phase_2)
+            self.p1.start()
 
         self.check_home_position(ablauf)
 
@@ -179,34 +174,20 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         if self.logik.inputs[INPUT_ENDSCHALTER]:
             return
         
-        def ablauf_auswertung():
-            start_auswertung_zeit = time.time()
-            wd = self.logik.config['wd_auswertung']
-            
-            # Phase 1: Schnell zurückfahren auf Zeit
-            ok = self.logik.fahrt_sequenz(
-                richtung_ch=OUTPUT_LINKS, 
-                speed_ch=OUTPUT_SCHNELL, 
-                dauer=self.logik.config['a_schnell'],
-                start_zeit_gesamt=start_auswertung_zeit,
-                watchdog_limit=wd
-            )
-            if not ok:
-                self.show_watchdog_alarm("Auswertung")
-                return
-                
-            # Phase 2: Langsam zurückfahren bis Endschalter
-            ok = self.logik.fahrt_sequenz(
-                richtung_ch=OUTPUT_LINKS, 
-                speed_ch=OUTPUT_LANGSAM, 
-                stop_am_endschalter=True,
-                start_zeit_gesamt=start_auswertung_zeit,
-                watchdog_limit=wd
-            )
-            if not ok:
-                self.show_watchdog_alarm("Auswertung")
+        wd = self.logik.config['wd_auswertung']
+        # Phase 1: Schnell zurück
+        self.a1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_SCHNELL, dauer=self.logik.config['a_schnell'], watchdog_limit=wd, fahrt_name="Auswertung")
+        
+        def starte_auswertung_phase_2(erfolg, name):
+            if erfolg: # Wenn Schnell fertig, fahre Langsam bis zum Endschalter
+                self.a2 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Auswertung")
+                self.a2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
+                self.a2.start()
+            else:
+                self.show_watchdog_alarm(name)
 
-        ablauf_auswertung()
+        self.a1.fahrt_beendet.connect(starte_auswertung_phase_2)
+        self.a1.start()
 
     def check_pin_and_open_settings(self):
         pin_input, ok = QInputDialog.getText(self, "PIN-Eingabe", "Bitte 4-stelligen PIN eingeben:", QLineEdit.Password)
@@ -216,7 +197,7 @@ class SchlittenApp(Ui_SchlittenSteuerung):
                 self.logik.worker.request_reconnect()
 
     def closeEvent(self, event):
-        # Logik und Threads ordentlich herunterfahren
+        # Logik und Threads ordentlich heruntenfahren
         self.logik.shutdown()
         event.accept()
 
