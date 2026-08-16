@@ -66,9 +66,9 @@ class ModbusWorker(QThread):
                     
                     try:
                         # ---- 1. HEARTBEAT / BLINKEN AUF CH6 (Adresse 4) ----
-                        if cycle_start - last_heartbeat_time >= 0.5:
+                        if cycle_start - last_heartbeat_time >= 0.1:
                             heartbeat_state = not heartbeat_state
-                            client.write_coil(address=4, value=heartbeat_state, device_id=self.slave_id)
+                            client.write_coil(address=8, value=heartbeat_state, device_id=self.slave_id)
                             last_heartbeat_time = cycle_start
                         
                         # ---- 2. SENDER-CHECK (Schreiben NUR bei echter Änderung) ----
