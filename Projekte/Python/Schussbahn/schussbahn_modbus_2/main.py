@@ -206,5 +206,5 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
     app.setStyle('Fusion')
     window = SchlittenApp()
-    window.show()
+    window.showFullScreen()
     sys.exit(app.exec_())
