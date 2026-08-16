@@ -125,17 +125,18 @@ class Ui_SchlittenSteuerung(QMainWindow):
         self.in_leds = []
         self.out_leds = []
 
-        for i in range(8):
+        for i in range(9):
             led_layout.setRowStretch(i+1, 1)
-            
+
+            if i < 8:
             # Eingangs-LED & Name
-            led_in = QLabel()
-            led_in.setFixedSize(14, 14)
-            led_layout.addWidget(led_in, i+1, 0)
-            txt_in = QLabel(in_names[i])
-            txt_in.setFont(QFont("Arial", 9))
-            led_layout.addWidget(txt_in, i+1, 1)
-            self.in_leds.append(led_in)
+                led_in = QLabel()
+                led_in.setFixedSize(14, 14)
+                led_layout.addWidget(led_in, i+1, 0)
+                txt_in = QLabel(in_names[i])
+                txt_in.setFont(QFont("Arial", 9))
+                led_layout.addWidget(txt_in, i+1, 1)
+                self.in_leds.append(led_in)
 
             # Ausgangs-LED & Name
             led_out = QLabel()

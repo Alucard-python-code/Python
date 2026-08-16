@@ -50,9 +50,16 @@ class SchlittenApp(Ui_SchlittenSteuerung):
 
     def update_gui_leds(self, inputs, outputs):
         """Aktualisiert die farbigen LEDs auf der rechten Seite."""
-        for i in range(8):
-            self.set_led_state(self.in_leds[i], inputs[i])
-            self.set_led_state(self.out_leds[i], outputs[i])
+        # 8 Eingänge aktualisieren
+        for i in range(len(inputs)):
+            if i < len(self.in_leds):
+                self.set_led_state(self.in_leds[i], inputs[i])
+        
+        # 9 Ausgänge (inklusive Heartbeat an Index 8) aktualisieren
+        for i in range(len(outputs)):
+            if i < len(self.out_leds):
+                self.set_led_state(self.out_leds[i], outputs[i])
+
 
     def show_watchdog_alarm(self, fahrt_name):
         """Öffnet das rote Alarmfenster bei einer Watchdog-Überschreitung."""
