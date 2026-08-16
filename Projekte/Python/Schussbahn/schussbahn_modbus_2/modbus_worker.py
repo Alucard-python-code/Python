@@ -93,7 +93,7 @@ class ModbusWorker(QThread):
                             
                             # Blinken für die GUI-LED auf CH6 (Index 4) einspeisen
                             current_outputs_for_gui = list(current_relays)
-                            current_outputs_for_gui[4] = heartbeat_state  
+                            current_outputs_for_gui[8] = heartbeat_state  
                             
                             self.data_updated.emit(self.inputs, current_outputs_for_gui)
                         else:
