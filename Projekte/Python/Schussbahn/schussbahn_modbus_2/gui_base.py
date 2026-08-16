@@ -120,7 +120,7 @@ class Ui_SchlittenSteuerung(QMainWindow):
         led_layout.addWidget(lbl_out_hdr, 0, 2, 1, 2, Qt.AlignCenter)
 
         in_names = ["1: Motorschutz", "2: Endschalter", "3: RM Rechts", "4: RM Links", "5: RM Langsam", "6: RM Schnell", "7: Frei", "8: Frei"]
-        out_names = ["1: Rechtslauf", "2: Linkslauf", "3: Langsam", "4: Schnell", "5: Frei", "6: Frei", "7: Frei", "8: Licht (CH8)"]
+        out_names = ["1: Rechtslauf", "2: Linkslauf", "3: Langsam", "4: Schnell", "5: Frei", "6: Frei", "7: Frei", "8: Licht (CH8)", "9: Heartbeat (CH9)"]
 
         self.in_leds = []
         self.out_leds = []
