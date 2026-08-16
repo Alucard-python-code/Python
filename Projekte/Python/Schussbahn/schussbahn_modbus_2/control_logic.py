@@ -11,7 +11,8 @@ class FahrtWorker(QThread):
     """Führt die Fahrten autark im Hintergrund aus, ohne den Modbus-Takt zu stören."""
     fahrt_beendet = pyqtSignal(bool, str)
 
-    def __init__(self, logik, richtung_ch, speed_ch, dauer=None, stop_am_endschalter=False, watchdog_limit=None, fahrt_name=""):
+    def __init__(self, logik, richtung_ch, speed_ch, dauer=None, 
+                 stop_am_endschalter=False, watchdog_limit=None, fahrt_name=""):
         super().__init__()
         self.logik = logik
         self.richtung_ch = richtung_ch
@@ -23,16 +24,14 @@ class FahrtWorker(QThread):
 
     def run(self):
         start_zeit_gesamt = time.time()
-        
+
         try:
             # --- PHASE 1: START ---
-            self.logik.outputs[self.richtung_ch] = True
-            self.logik.worker.update_outputs(self.logik.outputs)
+            self.logik.write_output_direct(self.richtung_ch, True)
             QThread.msleep(100)
 
             if self.speed_ch is not None:
-                self.logik.outputs[self.speed_ch] = True
-                self.logik.worker.update_outputs(self.logik.outputs)
+                self.logik.write_output_direct(self.speed_ch, True)
 
             # --- PHASE 2: FAHRTSCHLEIFE ---
             start_phase = time.time()
@@ -47,32 +46,26 @@ class FahrtWorker(QThread):
                     break
                 if self.dauer and (time.time() - start_phase >= self.dauer):
                     break
-                
-                # KORREKTUR: Taktung in der Überwachungsschleife auf 40ms erhöht.
-                # Das entlastet die CPU des Raspberry Pi drastisch.
+
                 QThread.msleep(40)
 
             # --- PHASE 3: STOPP ---
             if self.speed_ch is not None:
-                self.logik.outputs[self.speed_ch] = False
-                self.logik.worker.update_outputs(self.logik.outputs)
-            QThread.msleep(100)
+                self.logik.write_output_direct(self.speed_ch, False)
+                QThread.msleep(100)
 
-            self.logik.outputs[self.richtung_ch] = False
-            self.logik.worker.update_outputs(self.logik.outputs)
-            
+            self.logik.write_output_direct(self.richtung_ch, False)
             self.fahrt_beendet.emit(True, self.fahrt_name)
-            
+
         except Exception:
             self.NOT_AUS()
             self.fahrt_beendet.emit(False, self.fahrt_name)
 
     def NOT_AUS(self):
-        self.logik.outputs[OUTPUT_RECHTS] = False
-        self.logik.outputs[OUTPUT_LINKS] = False
-        self.logik.outputs[OUTPUT_LANGSAM] = False
-        self.logik.outputs[OUTPUT_SCHNELL] = False
-        self.logik.worker.update_outputs(self.logik.outputs)
+        self.logik.write_output_direct(OUTPUT_RECHTS, False)
+        self.logik.write_output_direct(OUTPUT_LINKS, False)
+        self.logik.write_output_direct(OUTPUT_LANGSAM, False)
+        self.logik.write_output_direct(OUTPUT_SCHNELL, False)
 
 
 class SchlittenLogik(QObject):
@@ -81,19 +74,23 @@ class SchlittenLogik(QObject):
         super().__init__()
         self.config = load_stored_config()
         self.inputs = [False] * 8
-        self.outputs = [False] * 8
+        self.outputs = [False] * 9  # Auf 9 erweitert für Heartbeat-Kompatibilität
         self.homing_done = False
+        self.data_lock = threading.Lock()
 
         self.worker = ModbusWorker(self.config)
         self.worker.data_updated.connect(self.handle_io_update)
         self.worker.start()
 
     def handle_io_update(self, inputs, outputs):
-        self.inputs = inputs
+        with self.data_lock:
+            self.inputs = list(inputs)
 
     def write_output_direct(self, channel, state):
-        self.outputs[channel] = state
-        self.worker.update_outputs(self.outputs)
+        with self.data_lock:
+            self.outputs[channel] = state
+            # Schickt eine saubere Kopie an den Hintergrund-Thread
+            self.worker.update_outputs(list(self.outputs))
 
     def shutdown(self):
         self.worker.running = False
