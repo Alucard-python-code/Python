@@ -35,94 +35,91 @@ class ModbusWorker(QThread):
         self.trigger_reconnect = True
 
     def run(self):
+        """Hauptschleife des Hintergrund-Threads (Dauertakt)."""
+        print(f"[Modbus] Thread gestartet. Ziel-IP: {self.ip}:{self.port}")
+        
         while self.running:
-            client = None
+            # 1. Sicherstellen, dass die Verbindung physisch steht
+            if not self.client.connected:
+                try:
+                    # Harter Verbindungs-Reset
+                    self.client.close() 
+                    time.sleep(0.05)
+                    self.client.connect()
+                except Exception as e:
+                    print(f"[Modbus-Fehler] Verbindungsaufbau fehlgeschlagen: {e}")
+                    time.sleep(0.1)
+                    continue
+
+            # 2. Ausgänge/Fahrbefehle an den Pico senden (FC15)
             try:
-                # Verbindung im stabilen RTU-over-TCP Modus ("Transparent Mode") öffnen
-                client = ModbusTcpClient(
-                    host=self.config['ip'], 
-                    port=self.config['port'], 
-                    framer="rtu", 
-                    timeout=0.2
+                # Wir holen uns die aktuellen Zustände aus dem RAM
+                with self.lock:
+                    current_relays = list(self.relay_write_list)
+
+                # Sende den gesamten Block an den Pico
+                result_write = self.client.write_coils(
+                    address=0, 
+                    values=current_relays, 
+                    slave=self.slave_id
                 )
                 
-                if not client.connect():
-                    time.sleep(1.0)
+                # Wenn das Senden fehlschlägt (z.B. Kabel gezogen) -> Auto-Reset auslösen
+                if result_write.isError():
+                    print("[Modbus-Warnung] Schreibfehler! Erzwinge Socket-Reset...")
+                    self.client.close()
+                    time.sleep(0.05)
                     continue
-                
-                heartbeat_state = False
-                last_heartbeat_time = 0
-                self.trigger_reconnect = False
-                
-                # Beim allerersten Verbindungsaufbau einmalig den aktuellen Zustand erzwingen
-                with self.data_lock:
-                    self.last_sent_relays = list(self.relay_write_list)
-                client.write_coils(address=0, values=self.last_sent_relays[:4], device_id=self.slave_id)
-                client.write_coil(address=7, value=self.last_sent_relays[7], device_id=self.slave_id)
-                
-                # Haupt-Kommunikationsschleife
-                while self.running and not self.trigger_reconnect:
-                    cycle_start = time.time()
                     
-                    try:
-                        # ---- 1. HEARTBEAT / BLINKEN AUF CH6 (Adresse 4) ----
-                        if cycle_start - last_heartbeat_time >= 0.1:
-                            heartbeat_state = not heartbeat_state
-                            client.write_coil(address=8, value=heartbeat_state, device_id=self.slave_id)
-                            last_heartbeat_time = cycle_start
-                        
-                        # ---- 2. SENDER-CHECK (Schreiben NUR bei echter Änderung) ----
-                        with self.data_lock:
-                            current_relays = list(self.relay_write_list)
-                        
-                        # Prüfen, ob sich bei den Schützen CH1-CH4 etwas geändert hat
-                        if current_relays[:4] != self.last_sent_relays[:4]:
-                            client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
-                            self.last_sent_relays[:4] = current_relays[:4]
-                        
-                        # Prüfen, ob sich das Licht CH8 (Index 7) geändert hat
-                        if current_relays[7] != self.last_sent_relays[7]:
-                            client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
-                            self.last_sent_relays[7] = current_relays[7]
+            except Exception as e:
+                print(f"[Modbus-Fehler] Fehler beim Schreiben: {e}")
+                self.client.close()
+                continue
 
-                        # ---- 3. HARDWARE-EINGÄNGE LESEN (Standard-Poll) ----
-                        rr = client.read_discrete_inputs(address=0, count=8, device_id=self.slave_id)
-                        
-                        if rr and not rr.isError():
-                            self.inputs = rr.bits[:8]
-                            
-                            # Blinken für die GUI-LED auf CH6 (Index 4) einspeisen
-                            current_outputs_for_gui = list(current_relays)
-                            current_outputs_for_gui[8] = heartbeat_state  
-                            
-                            self.data_updated.emit(self.inputs, current_outputs_for_gui)
-                        else:
-                            if hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
-                                client.framer.clear()
-                                
-                    except Exception:
-                        if client and hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
-                            client.framer.clear()
-                    
-                    # Dynamische Taktregelung auf exakt 100ms
-                    elapsed = time.time() - cycle_start
-                    sleep_time = max(0.01, 0.1 - elapsed)
-                    time.sleep(sleep_time)
-                    
+            # 3. Den schnellen Heartbeat an Adresse 8 senden (FC05), um den 200ms Watchdog zu füttern
+            try:
+                result_hb = self.client.write_coil(address=8, value=True, slave=self.slave_id)
+                heartbeat_state = False if result_hb.isError() else True
+                
+                if result_hb.isError():
+                    self.client.close()
+                    continue
             except Exception:
-                time.sleep(1.0)
-            finally:
-                if client:
-                    try:
-                        client.close()
-                    except:
-                        pass
+                heartbeat_state = False
+                self.client.close()
+                continue
 
-        # Beim Schließen der Anwendung alle Ausgänge sicher abwerfen
+            # 4. Die 8 physischen Eingänge vom Pico live abfragen (FC02)
+            try:
+                result_read = self.client.read_discrete_inputs(address=0, count=8, slave=self.slave_id)
+                
+                if not result_read.isError():
+                    self.inputs = result_read.bits[:8]
+                else:
+                    self.client.close()
+                    continue
+            except Exception:
+                self.client.close()
+                continue
+
+            # 5. Daten fehlerfrei verarbeitet -> GUI-LEDs über main.py füttern
+            try:
+                # Wir hängen das blinkende Heartbeat-Signal an den Index 8 (9. LED)
+                current_outputs_for_gui = list(current_relays)
+                current_outputs_for_gui[8] = heartbeat_state
+                
+                # Signal an das Hauptfenster senden
+                self.data_updated.emit(self.inputs, current_outputs_for_gui)
+            except Exception:
+                pass
+
+            # Exakter Zeittakt (100 ms), damit der 200-ms-Watchdog des Picos niemals hungert
+            time.sleep(0.1)
+
+        # Beim geordneten Beenden der GUI alle Ausgänge nullen und Port freigeben
         try:
-            client = ModbusTcpClient(host=self.config['ip'], port=self.config['port'], framer="rtu", timeout=0.5)
-            if client.connect():
-                client.write_coils(address=0, values=[False]*9, device_id=self.slave_id)
-                client.close()
-        except:
+            self.client.write_coils(address=0, values=[False]*9, slave=self.slave_id)
+            self.client.close()
+        except Exception:
             pass
+        print("[Modbus] Thread sauber beendet.")
