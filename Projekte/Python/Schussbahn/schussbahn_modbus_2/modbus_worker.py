@@ -21,11 +21,11 @@ class ModbusWorker(QThread):
         
         # Thread-Sicherung
         self.data_lock = threading.Lock()
-        self.relay_write_list = [False] * 8
+        self.relay_write_list = [False] * 9
         self.inputs = [False] * 8
         
         # SPIEGEL-LISTE: Speichert den Zustand, der ZULETZT an die Hardware gesendet wurde
-        self.last_sent_relays = [False] * 8
+        self.last_sent_relays = [False] * 9
 
     def update_outputs(self, new_outputs):
         with self.data_lock:
@@ -122,7 +122,7 @@ class ModbusWorker(QThread):
         try:
             client = ModbusTcpClient(host=self.config['ip'], port=self.config['port'], framer="rtu", timeout=0.5)
             if client.connect():
-                client.write_coils(address=0, values=[False]*8, device_id=self.slave_id)
+                client.write_coils(address=0, values=[False]*9, device_id=self.slave_id)
                 client.close()
         except:
             pass
