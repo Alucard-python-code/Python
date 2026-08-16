@@ -9,6 +9,7 @@ class ModbusWorker(QThread):
     """
     Hochstabiler Industrie-Hintergrund-Thread für das Waveshare POE ETH Relay (B).
     Schreibt Ausgänge NUR bei echten Änderungen. Verhindert Bus-Kollaps vollständig.
+    Mit integriertem automatischen Socket-Reset bei Verbindungsabriss.
     """
     data_updated = pyqtSignal(list, list)
 
@@ -47,9 +48,11 @@ class ModbusWorker(QThread):
                 )
                 
                 if not client.connect():
+                    print("[Modbus] Verbindung fehlgeschlagen. Naechster Versuch in 1 Sekunde...")
                     time.sleep(1.0)
                     continue
                 
+                print("[Modbus] Erfolgreich verbunden! Starte Kommunikation...")
                 heartbeat_state = False
                 last_heartbeat_time = 0
                 self.trigger_reconnect = False
@@ -65,10 +68,13 @@ class ModbusWorker(QThread):
                     cycle_start = time.time()
                     
                     try:
-                        # ---- 1. HEARTBEAT / BLINKEN AUF CH6 (Adresse 4) ----
+                        # ---- 1. HEARTBEAT / BLINKEN AUF ADRESSE 8 ----
                         if cycle_start - last_heartbeat_time >= 0.1:
                             heartbeat_state = not heartbeat_state
-                            client.write_coil(address=8, value=heartbeat_state, device_id=self.slave_id)
+                            res_hb = client.write_coil(address=8, value=heartbeat_state, device_id=self.slave_id)
+                            if res_hb.isError():
+                                print("[Modbus-Warnung] Heartbeat-Fehler! Stoße Reset an...")
+                                break # Bricht die innere Schleife ab, um im finally-Block zu schließen
                             last_heartbeat_time = cycle_start
                         
                         # ---- 2. SENDER-CHECK (Schreiben NUR bei echter Änderung) ----
@@ -77,12 +83,16 @@ class ModbusWorker(QThread):
                         
                         # Prüfen, ob sich bei den Schützen CH1-CH4 etwas geändert hat
                         if current_relays[:4] != self.last_sent_relays[:4]:
-                            client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
+                            res_coils = client.write_coils(address=0, values=current_relays[:4], device_id=self.slave_id)
+                            if res_coils.isError():
+                                break
                             self.last_sent_relays[:4] = current_relays[:4]
                         
                         # Prüfen, ob sich das Licht CH8 (Index 7) geändert hat
                         if current_relays[7] != self.last_sent_relays[7]:
-                            client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
+                            res_light = client.write_coil(address=7, value=current_relays[7], device_id=self.slave_id)
+                            if res_light.isError():
+                                break
                             self.last_sent_relays[7] = current_relays[7]
 
                         # ---- 3. HARDWARE-EINGÄNGE LESEN (Standard-Poll) ----
@@ -91,29 +101,36 @@ class ModbusWorker(QThread):
                         if rr and not rr.isError():
                             self.inputs = rr.bits[:8]
                             
-                            # Blinken für die GUI-LED auf CH6 (Index 4) einspeisen
+                            # Blinken für die GUI-LED auf Index 8 (9. LED) einspeisen
                             current_outputs_for_gui = list(current_relays)
                             current_outputs_for_gui[8] = heartbeat_state  
                             
                             self.data_updated.emit(self.inputs, current_outputs_for_gui)
                         else:
+                            print("[Modbus-Warnung] Lesefehler der Eingaenge! Reconnect erforderlich...")
                             if hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
                                 client.framer.clear()
+                            break # Erzwingt einen harten Leitungs-Reset
                                 
-                    except Exception:
+                    except Exception as e:
+                        print(f"[Modbus-Schleifenfehler] {e}")
                         if client and hasattr(client, 'framer') and hasattr(client.framer, 'clear'):
                             client.framer.clear()
+                        break # Bei jeder Exception sofort abbrechen für frischen Connect
                     
                     # Dynamische Taktregelung auf exakt 100ms
                     elapsed = time.time() - cycle_start
                     sleep_time = max(0.01, 0.1 - elapsed)
                     time.sleep(sleep_time)
                     
-            except Exception:
+            except Exception as e:
+                print(f"[Modbus-Verbindungsfehler] {e}. Neuer Versuch in 1 Sekunde...")
                 time.sleep(1.0)
             finally:
                 if client:
                     try:
+                        # Hier erfolgt der automatische Reset: Altes Socket hart schließen!
+                        print("[Modbus] Schließe alten Socket für Reset...")
                         client.close()
                     except:
                         pass
