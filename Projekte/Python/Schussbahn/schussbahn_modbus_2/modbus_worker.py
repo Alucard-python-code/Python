@@ -42,7 +42,6 @@ class ModbusWorker(QThread):
             # 1. Sicherstellen, dass die Verbindung physisch steht
             if not self.client.connected:
                 try:
-                    # Harter Verbindungs-Reset
                     self.client.close() 
                     time.sleep(0.05)
                     self.client.connect()
@@ -53,18 +52,16 @@ class ModbusWorker(QThread):
 
             # 2. Ausgänge/Fahrbefehle an den Pico senden (FC15)
             try:
-                # Wir holen uns die aktuellen Zustände aus dem RAM
                 with self.lock:
                     current_relays = list(self.relay_write_list)
 
-                # Sende den gesamten Block an den Pico
+                # Sende den gesamten Block an den Pico (Verwendung von device_id statt slave)
                 result_write = self.client.write_coils(
                     address=0, 
                     values=current_relays, 
-                    slave=self.slave_id
+                    device_id=self.slave_id
                 )
                 
-                # Wenn das Senden fehlschlägt (z.B. Kabel gezogen) -> Auto-Reset auslösen
                 if result_write.isError():
                     print("[Modbus-Warnung] Schreibfehler! Erzwinge Socket-Reset...")
                     self.client.close()
@@ -76,9 +73,9 @@ class ModbusWorker(QThread):
                 self.client.close()
                 continue
 
-            # 3. Den schnellen Heartbeat an Adresse 8 senden (FC05), um den 200ms Watchdog zu füttern
+            # 3. Den schnellen Heartbeat an Adresse 8 senden (FC05)
             try:
-                result_hb = self.client.write_coil(address=8, value=True, slave=self.slave_id)
+                result_hb = self.client.write_coil(address=8, value=True, device_id=self.slave_id)
                 heartbeat_state = False if result_hb.isError() else True
                 
                 if result_hb.isError():
@@ -91,7 +88,7 @@ class ModbusWorker(QThread):
 
             # 4. Die 8 physischen Eingänge vom Pico live abfragen (FC02)
             try:
-                result_read = self.client.read_discrete_inputs(address=0, count=8, slave=self.slave_id)
+                result_read = self.client.read_discrete_inputs(address=0, count=8, device_id=self.slave_id)
                 
                 if not result_read.isError():
                     self.inputs = result_read.bits[:8]
@@ -102,23 +99,24 @@ class ModbusWorker(QThread):
                 self.client.close()
                 continue
 
-            # 5. Daten fehlerfrei verarbeitet -> GUI-LEDs über main.py füttern
+            # 5. Daten fehlerfrei verarbeitet -> GUI füttern
             try:
-                # Wir hängen das blinkende Heartbeat-Signal an den Index 8 (9. LED)
                 current_outputs_for_gui = list(current_relays)
+                # KORRIGIERT: Schreibt den Zustand sauber in den 9. Platz (Index 8) statt die Liste zu loeschen
                 current_outputs_for_gui[8] = heartbeat_state
                 
-                # Signal an das Hauptfenster senden
+                # Signal fehlerfrei an das Hauptfenster senden
                 self.data_updated.emit(self.inputs, current_outputs_for_gui)
-            except Exception:
+            except Exception as e:
+                print(f"[GUI-Signal Fehler]: {e}")
                 pass
 
-            # Exakter Zeittakt (100 ms), damit der 200-ms-Watchdog des Picos niemals hungert
+            # Exakter Zeittakt (100 ms)
             time.sleep(0.1)
 
-        # Beim geordneten Beenden der GUI alle Ausgänge nullen und Port freigeben
+        # Beim geordneten Beenden der GUI alle Ausgänge nullen
         try:
-            self.client.write_coils(address=0, values=[False]*9, slave=self.slave_id)
+            self.client.write_coils(address=0, values=[False]*9, device_id=self.slave_id)
             self.client.close()
         except Exception:
             pass
