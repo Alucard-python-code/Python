@@ -11,13 +11,13 @@ DEFAULT_CONFIG = {
     'ip': '192.168.8.250',
     'port': 502,
     'pin': '1234',
-    'bahn_titel': 'Bahn 1',
+    'bahn_titel': 'Bahn 1',  # NEU: Flexibler Anzeigetitel für das Hauptfenster
     'b_schnell': 3.0,
     'b_langsam': 2.0,
     'a_schnell': 4.0,
-    'wd_homing': 15.0,      # NEU: Watchdog Homing (Sekunden)
-    'wd_beschuss': 10.0,    # NEU: Watchdog Beschuss (Sekunden)
-    'wd_auswertung': 20.0   # NEU: Watchdog Auswertung (Sekunden)
+    'wd_homing': 15.0,       # Watchdog Homing (Sekunden)
+    'wd_beschuss': 10.0,     # Watchdog Beschuss (Sekunden)
+    'wd_auswertung': 20.0    # Watchdog Auswertung (Sekunden)
 }
 
 def load_stored_config():
@@ -26,11 +26,11 @@ def load_stored_config():
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 stored = json.load(f)
-                # Sicherheitsabgleich: Falls Schlüssel in der Datei fehlen, mit Default auffüllen
-                for key, value in DEFAULT_CONFIG.items():
-                    if key not in stored:
-                        stored[key] = value
-                return stored
+            # Sicherheitsabgleich: Falls Schlüssel in der Datei fehlen, mit Default auffüllen
+            for key, value in DEFAULT_CONFIG.items():
+                if key not in stored:
+                    stored[key] = value
+            return stored
         except Exception:
             return DEFAULT_CONFIG.copy()
     else:
@@ -47,15 +47,15 @@ def save_stored_config(config_dict):
         pass
 
 # Register-Mapping für die Modbus-Hardware
-INPUT_MOTORSCHUTZ = 0   # IN1
-INPUT_ENDSCHALTER = 1   # IN2
-INPUT_RM_RECHTS   = 2   # IN3
-INPUT_RM_LINKS    = 3   # IN4
-INPUT_RM_LANGSAM  = 4   # IN5
-INPUT_RM_SCHNELL  = 5   # IN6
+INPUT_MOTORSCHUTZ = 0 # IN1
+INPUT_ENDSCHALTER = 1 # IN2
+INPUT_RM_RECHTS = 2   # IN3
+INPUT_RM_LINKS = 3    # IN4
+INPUT_RM_LANGSAM = 4  # IN5
+INPUT_RM_SCHNELL = 5  # IN6
 
-OUTPUT_RECHTS     = 0   # CH1
-OUTPUT_LINKS      = 1   # CH2
-OUTPUT_LANGSAM    = 2   # CH3
-OUTPUT_SCHNELL    = 3   # CH4
-OUTPUT_LICHT      = 7   # CH8
+OUTPUT_RECHTS = 0   # CH1
+OUTPUT_LINKS = 1    # CH2
+OUTPUT_LANGSAM = 2  # CH3
+OUTPUT_SCHNELL = 3  # CH4
+OUTPUT_LICHT = 7    # CH8

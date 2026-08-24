@@ -4,17 +4,19 @@ from PyQt5.QtWidgets import QDialog, QFormLayout, QLineEdit, QPushButton
 from config import save_stored_config
 
 class SettingsDialog(QDialog):
-    """Einstellungsfenster für IP, Port, Fahrtzeiten und Watchdogs."""
+    """Einstellungsfenster für Titel, IP, Port, Fahrtzeiten und Watchdogs."""
     def __init__(self, parent, config):
         super().__init__(parent)
         self.config = config
         self.setWindowTitle("Einstellungen")
-        self.setFixedSize(380, 380)  # Höhe leicht erhöht für die neuen Felder
+        self.setFixedSize(380, 420)  # Höhe von 380 auf 420 erhöht für das neue Feld
         self.setStyleSheet("background-color: #1e1e1e; color: #ffffff;")
-        
+
         layout = QFormLayout(self)
 
+        # Neue Eingabezeile für den Bahntitel
         self.bahn_titel_edit = QLineEdit(self.config.get('bahn_titel', 'Bahn 1'))
+        
         self.ip_edit = QLineEdit(self.config['ip'])
         self.port_edit = QLineEdit(str(self.config['port']))
         self.b_schnell_edit = QLineEdit(str(self.config['b_schnell']))
@@ -24,13 +26,15 @@ class SettingsDialog(QDialog):
         self.wd_beschuss_edit = QLineEdit(str(self.config['wd_beschuss']))
         self.wd_auswertung_edit = QLineEdit(str(self.config['wd_auswertung']))
 
-        # Einheitliches Styling für Eingabefelder
+        # Einheitliches Styling für alle Eingabefelder
         input_style = "background-color: #2d2d2d; border: 1px solid #555; padding: 4px; color: white;"
-        for edit in [self.bahn_titel_edit, self.ip_edit, self.port_edit, self.b_schnell_edit, self.b_langsam_edit, 
-                     self.a_schnell_edit, self.wd_homing_edit, self.wd_beschuss_edit, self.wd_auswertung_edit]:
+        for edit in [self.bahn_titel_edit, self.ip_edit, self.port_edit, self.b_schnell_edit, 
+                    self.b_langsam_edit, self.a_schnell_edit, self.wd_homing_edit, 
+                    self.wd_beschuss_edit, self.wd_auswertung_edit]:
             edit.setStyleSheet(input_style)
 
-        layout.addRow("Bahn-Titel:", self.bahn_titel_edit)
+        # Zeilen dem Layout hinzufügen
+        layout.addRow("Anzeige Titel:", self.bahn_titel_edit) # NEU
         layout.addRow("Modbus IP:", self.ip_edit)
         layout.addRow("Modbus Port:", self.port_edit)
         layout.addRow("Beschuss Schnell (s):", self.b_schnell_edit)
@@ -47,6 +51,7 @@ class SettingsDialog(QDialog):
 
     def save(self):
         try:
+            # Werte aus den Feldern zurück in das Konfigurations-Dict schreiben
             self.config['bahn_titel'] = self.bahn_titel_edit.text()
             self.config['ip'] = self.ip_edit.text()
             self.config['port'] = int(self.port_edit.text())
@@ -56,8 +61,8 @@ class SettingsDialog(QDialog):
             self.config['wd_homing'] = float(self.wd_homing_edit.text())
             self.config['wd_beschuss'] = float(self.wd_beschuss_edit.text())
             self.config['wd_auswertung'] = float(self.wd_auswertung_edit.text())
-            
+
             save_stored_config(self.config)
             self.accept()
         except ValueError:
-            pass  # Fehlerhafte Eingaben werden ignoriert
+            pass  # Fehlerhafte numerische Eingaben werden ignoriert

@@ -14,13 +14,16 @@ from control_logic import SchlittenLogik, FahrtWorker
 class SchlittenApp(Ui_SchlittenSteuerung):
     def __init__(self):
         super().__init__()
-        
+
         # Logik-Modul instanziieren
         self.logik = SchlittenLogik()
-        
+
         # UI aus gui_base.py initialisieren
         self.setup_ui()
+        
+        # NEU: Titel beim Programmstart aus der Konfiguration laden
         self.lbl_bahn_titel.setText(self.logik.config.get('bahn_titel', 'Bahn 1'))
+        
         self.init_signals()
 
         # IO-Zustände an die GUI-LEDs weiterleiten
@@ -55,12 +58,11 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         for i in range(len(inputs)):
             if i < len(self.in_leds):
                 self.set_led_state(self.in_leds[i], inputs[i])
-        
+
         # 9 Ausgänge (inklusive Heartbeat an Index 8) aktualisieren
         for i in range(len(outputs)):
             if i < len(self.out_leds):
                 self.set_led_state(self.out_leds[i], outputs[i])
-
 
     def show_watchdog_alarm(self, fahrt_name):
         """Öffnet das rote Alarmfenster bei einer Watchdog-Überschreitung."""
@@ -68,18 +70,18 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         alarm.setWindowTitle("WATCHDOG ALARM")
         alarm.setFixedSize(350, 140)
         alarm.setStyleSheet("background-color: #2d0000; color: #ff3333; border: 2px solid #ff3333;")
-        
+
         vbox = QVBoxLayout(alarm)
         lbl = QLabel(f"CRITICAL ERROR:\nWatchdog-Zeit für '{fahrt_name}' überschritten!\n\nAntrieb wurde zwangsabgeschaltet.")
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setStyleSheet("font-weight: bold; font-size: 12px; border: none;")
         vbox.addWidget(lbl)
-        
+
         btn = QPushButton("Fehler Quittieren")
         btn.setStyleSheet("background-color: #ff3333; color: white; font-weight: bold; padding: 6px;")
         btn.clicked.connect(alarm.accept)
         vbox.addWidget(btn)
-        
+
         alarm.exec_()
 
     def handle_fahrt_ergebnis(self, erfolg, fahrt_name):
@@ -94,21 +96,22 @@ class SchlittenApp(Ui_SchlittenSteuerung):
             dialog.setWindowTitle("Homing erforderlich")
             dialog.setFixedSize(300, 120)
             dialog.setStyleSheet("background-color: #1e1e1e; color: white;")
-            
+
             vbox = QVBoxLayout(dialog)
             lbl = QLabel("Schlitten nicht auf Endschalter!\nLangsam zur Home-Position fahren?")
             lbl.setAlignment(Qt.AlignCenter)
             vbox.addWidget(lbl)
-            
+
             btn = QPushButton("Bestätigen")
             btn.setStyleSheet("background-color: #1f5eff; padding: 6px; font-weight: bold; color: white;")
-            
+
             def starte_homing():
                 dialog.accept()
                 wd = self.logik.config['wd_homing']
-                
-                self.h1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Homing / Referenzfahrt")
-                
+
+                self.h1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, 
+                                      stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Homing / Referenzfahrt")
+
                 def homing_beendet(erfolg, name):
                     if erfolg:
                         self.logik.homing_done = True
@@ -141,11 +144,13 @@ class SchlittenApp(Ui_SchlittenSteuerung):
     def handle_beschuss(self):
         def ablauf():
             wd = self.logik.config['wd_beschuss']
-            self.p1 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_SCHNELL, dauer=self.logik.config['b_schnell'], watchdog_limit=wd, fahrt_name="Beschuss")
-            
+            self.p1 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_SCHNELL, 
+                                  dauer=self.logik.config['b_schnell'], watchdog_limit=wd, fahrt_name="Beschuss")
+
             def starte_phase_2(erfolg, name):
                 if erfolg:
-                    self.p2 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_LANGSAM, dauer=self.logik.config['b_langsam'], watchdog_limit=wd, fahrt_name="Beschuss")
+                    self.p2 = FahrtWorker(self.logik, OUTPUT_RECHTS, OUTPUT_LANGSAM, 
+                                          dauer=self.logik.config['b_langsam'], watchdog_limit=wd, fahrt_name="Beschuss")
                     self.p2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
                     self.p2.start()
                 else:
@@ -162,12 +167,12 @@ class SchlittenApp(Ui_SchlittenSteuerung):
             warning_dialog.setWindowTitle("Sicherheitssperre")
             warning_dialog.setFixedSize(320, 130)
             warning_dialog.setStyleSheet("background-color: #1e1e1e; color: white; border: 1px solid #d32f2f;")
-            
+
             vbox = QVBoxLayout(warning_dialog)
             lbl = QLabel("WARNUNG: Keine Referenzfahrt bekannt!\nAuswertung blockiert.\nBitte zuerst 'Beschuss' für Homing nutzen.")
             lbl.setAlignment(Qt.AlignCenter)
             vbox.addWidget(lbl)
-            
+
             btn = QPushButton("Verstanden")
             btn.setStyleSheet("background-color: #d32f2f; padding: 6px; font-weight: bold; color: white;")
             btn.clicked.connect(warning_dialog.accept)
@@ -177,13 +182,15 @@ class SchlittenApp(Ui_SchlittenSteuerung):
 
         if self.logik.inputs[INPUT_ENDSCHALTER]:
             return
-        
+
         wd = self.logik.config['wd_auswertung']
-        self.a1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_SCHNELL, dauer=self.logik.config['a_schnell'], watchdog_limit=wd, fahrt_name="Auswertung")
-        
+        self.a1 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_SCHNELL, 
+                              dauer=self.logik.config['a_schnell'], watchdog_limit=wd, fahrt_name="Auswertung")
+
         def starte_auswertung_phase_2(erfolg, name):
             if erfolg:
-                self.a2 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Auswertung")
+                self.a2 = FahrtWorker(self.logik, OUTPUT_LINKS, OUTPUT_LANGSAM, 
+                                      stop_am_endschalter=True, watchdog_limit=wd, fahrt_name="Auswertung")
                 self.a2.fahrt_beendet.connect(self.handle_fahrt_ergebnis)
                 self.a2.start()
             else:
@@ -197,6 +204,7 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         if ok and pin_input == self.logik.config['pin']:
             dlg = SettingsDialog(self, self.logik.config)
             if dlg.exec_() == QDialog.Accepted:
+                # NEU: Den Titel sofort nach dem Verlassen des Dialogs im GUI-Label aktualisieren
                 self.lbl_bahn_titel.setText(self.logik.config.get('bahn_titel', 'Bahn 1'))
                 self.logik.worker.request_reconnect()
 

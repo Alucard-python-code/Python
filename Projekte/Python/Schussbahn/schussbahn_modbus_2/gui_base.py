@@ -15,17 +15,16 @@ class ScalableButton(QPushButton):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         # Berechne die Schriftgröße basierend auf der Diagonale/Fläche des Buttons
-        # Dadurch skaliert die Schrift sowohl bei Höhen- als auch bei Breitenänderung ideal
         width = self.width()
         height = self.height()
-        
+
         # Ein robuster Faktor, der im Vollbildmodus und im kleinen Fenster passt
         font_size = max(11, int((width + height) * 0.045))
-        
-        # Begrenzung nach oben, damit die Schrift bei riesigen 4K-Monitoren nicht zu extrem wird
+
+        # Begrenzung nach oben, damit die Schrift bei riesigen Monitoren nicht zu extrem wird
         if font_size > 36:
             font_size = 36
-            
+
         font = self.font()
         font.setPointSize(font_size)
         self.setFont(font)
@@ -37,7 +36,7 @@ class Ui_SchlittenSteuerung(QMainWindow):
         self.setWindowTitle("Maschinensteuerung Schlitten (PyQt5)")
         self.setMinimumSize(850, 450)
         self.resize(1024, 600)
-        
+
         # Darkmode-Design
         self.setStyleSheet("""
             QMainWindow { background-color: #121212; }
@@ -60,34 +59,54 @@ class Ui_SchlittenSteuerung(QMainWindow):
 
         # ---- STEUERUNGSPANEL (LINKS) ----
         left_box = QWidget()
-        left_main_layout = QVBoxLayout(left_box) # NEU: Vertikales Layout für Titel + Grid
+        left_main_layout = QVBoxLayout(left_box)  # Übergeordnetes Layout für Titel + Buttons
         left_main_layout.setContentsMargins(0, 0, 0, 0)
         left_main_layout.setSpacing(10)
 
-        # NEU: Das Label für den zentrierten Titel über den Buttons
+        # NEU: Zentrierter Titel über den Buttons
         self.lbl_bahn_titel = QLabel("Bahn 1")
         self.lbl_bahn_titel.setAlignment(Qt.AlignCenter)
-        self.lbl_bahn_titel.setFont(QFont("Arial", 18, QFont.Bold))
+        self.lbl_bahn_titel.setFont(QFont("Arial", 22, QFont.Bold))
         self.lbl_bahn_titel.setStyleSheet("color: #1f5eff; margin-bottom: 5px;")
         left_main_layout.addWidget(self.lbl_bahn_titel)
 
-        grid = QGridLayout() # Geändert: Kein left_box Parent direkt hier
+        # Gitternetz für die Steuerungselemente
+        grid = QGridLayout()
         grid.setSpacing(15)
-        # (Die Zeilen- und Spalten-Stretches bleiben gleich)
+
+        # Zeilen und Spalten im QGridLayout flexibel skalieren lassen
         grid.setRowStretch(0, 1)
         grid.setRowStretch(1, 1)
         grid.setColumnStretch(0, 1)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 1)
 
-        # Buttons erstellen (bleibt gleich)
+        # Buttons erstellen
         self.btn_beschuss = ScalableButton("Beschuss")
-        # ... [alle Buttons wie zuvor erstellen und im Grid adden] ...
+        self.btn_auswertung = ScalableButton("Auswertung")
+
+        self.btn_licht_an = ScalableButton("Licht AN")
+        self.btn_licht_an.setStyleSheet("background-color: #2e7d32; color: white;")
+
+        self.btn_licht_aus = ScalableButton("Licht AUS")
+        self.btn_licht_aus.setStyleSheet("background-color: #c62828; color: white;")
+
+        self.btn_settings = ScalableButton("Einstellungen")
+        self.btn_settings.setStyleSheet("background-color: #37474f; color: white;")
+
+        self.btn_exit = ScalableButton("EXIT")
+        self.btn_exit.setStyleSheet("background-color: #d32f2f; color: white;")
+
+        # Buttons ins Gitternetz einfügen
+        grid.addWidget(self.btn_beschuss, 0, 0)
+        grid.addWidget(self.btn_auswertung, 1, 0)
+        grid.addWidget(self.btn_licht_an, 0, 1)
+        grid.addWidget(self.btn_licht_aus, 1, 1)
+        grid.addWidget(self.btn_settings, 0, 2)
         grid.addWidget(self.btn_exit, 1, 2)
 
-        # NEU: Das Gitternetz in das linke Hauptlayout schieben
+        # Gitternetz in das linke Hauptlayout einbetten
         left_main_layout.addLayout(grid)
-
         main_layout.addWidget(left_box, stretch=7)
 
         # ---- LED MATRIX (RECHTS) ----
@@ -96,11 +115,11 @@ class Ui_SchlittenSteuerung(QMainWindow):
         right_box.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Expanding)
         right_box.setMinimumWidth(280)
         right_box.setMaximumWidth(400)
-        
+
         led_layout = QGridLayout(right_box)
         led_layout.setContentsMargins(12, 12, 12, 12)
         led_layout.setVerticalSpacing(6)
-        
+
         led_layout.setColumnStretch(1, 1)
         led_layout.setColumnStretch(3, 1)
 
@@ -112,8 +131,10 @@ class Ui_SchlittenSteuerung(QMainWindow):
         led_layout.addWidget(lbl_in_hdr, 0, 0, 1, 2, Qt.AlignCenter)
         led_layout.addWidget(lbl_out_hdr, 0, 2, 1, 2, Qt.AlignCenter)
 
-        in_names = ["1: Motorschutz", "2: Endschalter", "3: RM Rechts", "4: RM Links", "5: RM Langsam", "6: RM Schnell", "7: Frei", "8: Frei"]
-        out_names = ["1: Rechtslauf", "2: Linkslauf", "3: Langsam", "4: Schnell", "5: Frei", "6: Frei", "7: Frei", "8: Licht (CH8)", "9: Heartbeat (CH9)"]
+        in_names = ["1: Motorschutz", "2: Endschalter", "3: RM Rechts", "4: RM Links", 
+                    "5: RM Langsam", "6: RM Schnell", "7: Frei", "8: Frei"]
+        out_names = ["1: Rechtslauf", "2: Linkslauf", "3: Langsam", "4: Schnell", "5: Frei", 
+                     "6: Frei", "7: Frei", "8: Licht (CH8)", "9: Heartbeat (CH9)"]
 
         self.in_leds = []
         self.out_leds = []
@@ -122,7 +143,7 @@ class Ui_SchlittenSteuerung(QMainWindow):
             led_layout.setRowStretch(i+1, 1)
 
             if i < 8:
-            # Eingangs-LED & Name
+                # Eingangs-LED & Name
                 led_in = QLabel()
                 led_in.setFixedSize(14, 14)
                 led_layout.addWidget(led_in, i+1, 0)
