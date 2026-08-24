@@ -14,6 +14,7 @@ class SettingsDialog(QDialog):
         
         layout = QFormLayout(self)
 
+        self.bahn_titel_edit = QLineEdit(self.config.get('bahn_titel', 'Bahn 1'))
         self.ip_edit = QLineEdit(self.config['ip'])
         self.port_edit = QLineEdit(str(self.config['port']))
         self.b_schnell_edit = QLineEdit(str(self.config['b_schnell']))
@@ -25,10 +26,11 @@ class SettingsDialog(QDialog):
 
         # Einheitliches Styling für Eingabefelder
         input_style = "background-color: #2d2d2d; border: 1px solid #555; padding: 4px; color: white;"
-        for edit in [self.ip_edit, self.port_edit, self.b_schnell_edit, self.b_langsam_edit, 
+        for edit in [self.bahn_titel_edit, self.ip_edit, self.port_edit, self.b_schnell_edit, self.b_langsam_edit, 
                      self.a_schnell_edit, self.wd_homing_edit, self.wd_beschuss_edit, self.wd_auswertung_edit]:
             edit.setStyleSheet(input_style)
 
+        layout.addRow("Bahn-Titel:", self.bahn_titel_edit)
         layout.addRow("Modbus IP:", self.ip_edit)
         layout.addRow("Modbus Port:", self.port_edit)
         layout.addRow("Beschuss Schnell (s):", self.b_schnell_edit)
@@ -45,6 +47,7 @@ class SettingsDialog(QDialog):
 
     def save(self):
         try:
+            self.config['bahn_titel'] = self.bahn_titel_edit.text()
             self.config['ip'] = self.ip_edit.text()
             self.config['port'] = int(self.port_edit.text())
             self.config['b_schnell'] = float(self.b_schnell_edit.text())

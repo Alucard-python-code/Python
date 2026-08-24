@@ -11,6 +11,7 @@ DEFAULT_CONFIG = {
     'ip': '192.168.8.250',
     'port': 502,
     'pin': '1234',
+    'bahn_titel': 'Bahn 1',
     'b_schnell': 3.0,
     'b_langsam': 2.0,
     'a_schnell': 4.0,

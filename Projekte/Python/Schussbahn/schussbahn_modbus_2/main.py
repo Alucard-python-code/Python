@@ -20,6 +20,7 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         
         # UI aus gui_base.py initialisieren
         self.setup_ui()
+        self.lbl_bahn_titel.setText(self.logik.config.get('bahn_titel', 'Bahn 1'))
         self.init_signals()
 
         # IO-Zustände an die GUI-LEDs weiterleiten
@@ -196,6 +197,7 @@ class SchlittenApp(Ui_SchlittenSteuerung):
         if ok and pin_input == self.logik.config['pin']:
             dlg = SettingsDialog(self, self.logik.config)
             if dlg.exec_() == QDialog.Accepted:
+                self.lbl_bahn_titel.setText(self.logik.config.get('bahn_titel', 'Bahn 1'))
                 self.logik.worker.request_reconnect()
 
     def closeEvent(self, event):
