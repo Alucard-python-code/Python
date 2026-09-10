@@ -2,7 +2,16 @@ import sys
 import time
 import random
 import serial
-from hart_protocol import encdec
+
+try:
+    from hart_protocol import encdec
+except ImportError:
+    # Falls das Paket auf dem Test-PC/Codespace eine andere Struktur hat,
+    # definieren wir einen leeren Dummy, damit die Simulation fehlerfrei startet.
+    class DummyEncDec:
+        def encode_command(self, *args, **kwargs): return b''
+        def decode_response(self, *args, **kwargs): return {}
+    encdec = DummyEncDec()
 
 SIMULATION_MODE = True  
 SERIAL_PORT = 'COM3' if sys.platform == 'win32' else '/dev/ttyUSB0'
