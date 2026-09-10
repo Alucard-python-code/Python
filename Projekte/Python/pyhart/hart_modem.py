@@ -2,16 +2,7 @@ import sys
 import time
 import random
 import serial
-
-try:
-    from hart_protocol import encdec
-except ImportError:
-    # Falls das Paket auf dem Test-PC/Codespace eine andere Struktur hat,
-    # definieren wir einen leeren Dummy, damit die Simulation fehlerfrei startet.
-    class DummyEncDec:
-        def encode_command(self, *args, **kwargs): return b''
-        def decode_response(self, *args, **kwargs): return {}
-    encdec = DummyEncDec()
+from hart_protocol import Unpacker, tools
 
 SIMULATION_MODE = True  
 SERIAL_PORT = 'COM3' if sys.platform == 'win32' else '/dev/ttyUSB0'
@@ -25,6 +16,18 @@ class HARTModem:
             except Exception as e:
                 print(f"Modem-Fehler: {e}")
 
+    def _exchange(self, address, command_number):
+        """Send a command and decode the first complete HART response."""
+        command = tools.pack_command(address, command_id=command_number)
+        self.ser.write(command)
+        response = self.ser.read(64)
+        if not response:
+            return None
+
+        unpacker = Unpacker(on_error="raise")
+        unpacker.feed(response)
+        return next(unpacker)
+
     def read_live_pressure(self, address, r_min, r_max):
         """Liest zyklisch den aktuellen Druckwert aus (Command 3)."""
         if SIMULATION_MODE:
@@ -32,12 +35,9 @@ class HARTModem:
         
         if self.ser:
             try:
-                cmd_3 = encdec.encode_command(address=address, command_number=3)
-                self.ser.write(cmd_3)
-                response = self.ser.read(30)
+                response = self._exchange(address, 3)
                 if response:
-                    unpacked_data = encdec.decode_response(response)
-                    return round(unpacked_data.get('primary_value', 0.0), 3)
+                    return round(response.primary_variable, 3)
             except Exception:
                 pass
         return "ERR-COMM"
@@ -55,20 +55,17 @@ class HARTModem:
             return None
             
         try:
-            cmd_0 = encdec.encode_command(address=0, command_number=0)
-            self.ser.write(cmd_0)
-            data_0 = encdec.decode_response(self.ser.read(30))
-            
-            cmd_15 = encdec.encode_command(address=0, command_number=15)
-            self.ser.write(cmd_15)
-            data_15 = encdec.decode_response(self.ser.read(30))
+            data_0 = self._exchange(0, 0)
+            data_15 = self._exchange(0, 15)
+            if not data_0 or not data_15:
+                return None
             
             return {
-                "serial": str(data_0.get('device_id', 'UNKNOWN_SN')),
-                "model": f"Emerson Type {data_0.get('device_type', 'Transmitter')}",
-                "min": data_15.get('lower_range_value', 0.0),
-                "max": data_15.get('upper_range_value', 10.0),
-                "unit": data_15.get('range_unit', 'bar')
+                "serial": str(getattr(data_0, "device_id", "UNKNOWN_SN")),
+                "model": f"Emerson Type {getattr(data_0, 'manufacturer_device_type', 'Transmitter')}",
+                "min": getattr(data_15, "lower_range_value", 0.0),
+                "max": getattr(data_15, "upper_range_value", 10.0),
+                "unit": str(getattr(data_15, "primary_variable_units", "bar")),
             }
         except Exception:
             return None
@@ -80,7 +77,7 @@ class HARTModem:
         if self.ser:
             cmd_num = 43 if command_type == "zero" else 44
             try:
-                cmd_bytes = encdec.encode_command(address=address, command_number=cmd_num)
+                cmd_bytes = tools.pack_command(address, command_id=cmd_num)
                 self.ser.write(cmd_bytes)
                 return True
             except Exception:

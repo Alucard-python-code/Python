@@ -1,0 +1,10 @@
+[project]
+name = "repl-nix-workspace"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "hart-protocol>=2023.6.0",
+    "pyqt5>=5.15.11",
+    "pyserial>=3.5",
+]
