@@ -1,0 +1,74 @@
+=========================================================================
+SCHRITT 1: DIE DASHBOARD-EINSTELLUNGEN ÖFFNEN
+=========================================================================
+1. Öffnen Sie Ihr funktionierendes Brandmelde-Dashboard im Webbrowser.
+2. Klicken Sie oben rechts auf das Zahnrad-Symbol ("Dashboard settings").
+3. Wählen Sie in der linken Menüleiste den Punkt "Variables" (Variablen).
+4. Klicken Sie auf den blauen Button "Add variable" (oder "New variable").
+
+=========================================================================
+SCHRITT 2: DIE VARIABLE ALS DATENBANK-ABFRAGE DEFINIEREN
+=========================================================================
+1. Tragen Sie im Feld "Name" exakt das Wort ein: 
+   Geraet
+   (Wichtig: Genau so geschrieben, da es später im QR-Code verwendet wird!)
+   
+2. Wählen Sie bei "Type" aus der Liste aus: Query
+3. Tragen Sie bei "Label" ein: Schaltschrank ID
+
+=========================================================================
+SCHRITT 3: DIE ID-WERTE AUS DER DATENBANK LADEN
+=========================================================================
+1. Wählen Sie bei "Data source" Ihre "InfluxDB" (bmz) aus.
+2. Scrollen Sie nach unten zum Feld "Query" und tippen Sie dort exakt ein:
+   SHOW TAG VALUES FROM mqtt_consumer WITH KEY = "id"
+   
+3. Scrollen Sie ganz nach unten und klicken Sie auf den blauen Button 
+   "Apply" (oder "Save"). 
+4. Oben auf Ihrem Dashboard erscheint nun ein neues Dropdown-Menü, in dem 
+   alle live sendenden Picos (MELDER_01, MELDER_02, etc.) aufgelistet sind!
+=========================================================================
+SCHRITT 4: DEN EDIT-MODUS DES PANELS ÖFFNEN
+=========================================================================
+1. Gehen Sie zu der Kachel (dem Stat-Panel) Ihres ersten Schrankes.
+2. Klicken Sie oben rechts auf die drei kleinen Punkte und wählen Sie "Edit".
+
+=========================================================================
+SCHRITT 5: DIE DATEN-QUERY DYNAMISCH ANPASSEN (UNTEN LINKS)
+=========================================================================
+1. Suchen Sie die Datenabfrage-Zeile "A" im unteren Bereich.
+2. Löschen Sie bei "WHERE" die alte feste IP-Adresse heraus (z. B. "ip = 192...").
+3. Klicken Sie auf das "+", wählen Sie stattdessen den Schlüssel: id
+4. Klicken Sie auf das Feld dahinter (wo sonst die IP stand) und wählen Sie 
+   aus der Liste das blaue Variablen-Symbol aus:
+   $Geraet
+   
+   *Ergebnis*: In der Zeile steht nun exakt: WHERE id = $Geraet
+
+5. Klicken Sie oben rechts auf den blauen Button "Apply". 
+6. Wiederholen Sie diesen Schritt für alle Kacheln (PPM, RPM, etc.), die auf 
+   den QR-Code reagieren sollen. Speichern Sie das Dashboard danach ab!
+=========================================================================
+SCHRITT 6: DIE COMPONENTEN-UID AUS DER URL KOPIEREN
+=========================================================================
+1. Schauen Sie oben in die Adresszeile Ihres PC-Webbrowsers, während das 
+   Dashboard geöffnet ist. Die Webadresse sieht ungefähr so aus:
+   http://192.168.178
+   
+2. Kopieren Sie den Code, der direkt nach dem "/d/" steht. In diesem Beispiel 
+   ist die einzigartige Dashboard-UID: cfa123xyz
+
+=========================================================================
+SCHRITT 7: DEN FINALEN LINK FÜR DEN STICKER ZUSAMMENBAUEN
+=========================================================================
+1. Setzen Sie Ihre Werte nun in diese feste Industrie-Struktur ein. Der Link 
+   für den QR-Code-Sticker auf dem Gehäuse von Schrank 1 lautet:
+   http://192.168.178
+   
+   (Ersetzen Sie "192.168.178.200" durch Ihre Pi-IP und "cfa123xyz" durch Ihre UID!)
+
+2. Jedes Mal, wenn Sie oder ein Techniker diesen QR-Code mit der Smartphone-Kamera 
+   scannen, passiert Folgendes:
+   - Das Handy loggt sich dank des aktivierten Viewer-Modus passwortfrei ein.
+   - Der Befehl "var-Geraet=MELDER_01" filtert die Kachel sofort auf diesen Schrank.
+   - Der Befehl "kiosk=tv" blendet alle störenden Ränder aus für ein sauberes Vollbild!
