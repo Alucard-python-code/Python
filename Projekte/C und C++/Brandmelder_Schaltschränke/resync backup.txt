@@ -1,57 +1,78 @@
 =========================================================================
-SCHRITT 1: DAS SPIEGELUNGS-SKRIPT ERSTELLEN
+SCHRITT 1: DIE ZWEITE SSD ANSCHLIESSEN & ORDNER ERSTELLEN
 =========================================================================
-1. Öffnen Sie das Terminal Ihres Raspberry Pi (z. B. via SSH).
-2. Erstellen Sie eine neue Skript-Datei im Systemordner:
-   sudo nano /usr/local/bin/bmz_backup.sh
+1. Stecken Sie Ihre fertig formatierte, zweite Backup-SSD in den freien, 
+   blauen USB-3.0-Port des Raspberry Pi 4.
+2. Erstellen Sie den Zielordner im System, in den die Platte eingehängt wird:
+   sudo mkdir -p /mnt/backup_leitung
 
 =========================================================================
-SCHRITT 2: DEN CODE IN DIE DATEI KOPIEREN
+SCHRITT 2: DIE IDENTIFIKATIONS-NUMMER (UUID) DER ZWEITEN PLATTE FINDEN
 =========================================================================
-1. Kopieren Sie den folgenden Code-Block vollständig in das nano-Fenster:
+1. Fragen Sie Linux nach der eindeutigen Kennung der angeschlossenen Platten:
+   sudo blkid
+2. Suchen Sie in der Liste nach Ihrer zweiten SSD (meistens als /dev/sdb1 gelistet).
+3. Kopieren Sie die dort angezeigte UUID (eine Kombination aus Zahlen und Buchstaben, 
+   z. B. UUID="1234-ABCD" oder eine lange Folge).
+
+=========================================================================
+SCHRITT 3: DIE PLATTE IN DIE AUTO-START-LISTE EINTRAGEN
+=========================================================================
+1. Öffnen Sie die Linux-Festplattenverwaltung:
+   sudo nano /etc/fstab
+2. Fügen Sie ganz unten als allerletzte Zeile folgenden Befehl ein (ersetzen Sie 
+   die Beispiel-UUID durch Ihre gerade gefundene Kennung):
+   UUID=1234-ABCD /mnt/backup_leitung ext4 defaults,nofail 0 2
+   
+   (Hinweis: Das "nofail" sorgt dafür, dass der Pi trotzdem bootet, falls Sie 
+   die Backup-Platte zur Wartung mal abgezogen haben).
+3. Speichern und Schließen: Strg+O -> Enter -> Strg+X.
+4. Testen, ob die Platte fehlerfrei eingehängt wird:
+   sudo mount -a
+=========================================================================
+SCHRITT 4: DAS LOCAL-SSD-BACKUP-SKRIPT ANLEGEN
+=========================================================================
+1. Erstellen Sie die Skript-Datei auf dem Pi:
+   sudo nano /usr/local/bin/bmz_backup.sh
+2. Kopieren Sie folgenden Code vollständig in das Fenster:
 
 #!/bin/bash
 BACKUP_DIR="/mnt/backup_leitung"
 LOG_FILE="/var/log/bmz_backup.log"
 
-echo "--- Backup gestartet am $(date) ---" >> $LOG_FILE
+echo "--- Lokales SSD-Backup gestartet am $(date) ---" >> $LOG_FILE
 
-# rsync spiegelt hocheffizient nur veränderte Dateien
+# rsync spiegelt hocheffizient nur veränderte Systemdaten auf die 2. SSD
 rsync -av --delete /var/lib/influxdb/ $BACKUP_DIR/influxdb/ >> $LOG_FILE 2>&1
 rsync -av --delete /var/lib/grafana/ $BACKUP_DIR/grafana/ >> $LOG_FILE 2>&1
 rsync -av --delete /etc/telegraf/ $BACKUP_DIR/telegraf/ >> $LOG_FILE 2>&1
 
 if [ $? -eq 0 ]; then
     echo "SUCCESS" > /var/local/backup_status
-    echo "--- Backup ERFOLGREICH am $(date) ---" >> $LOG_FILE
+    echo "--- Backup auf 2. SSD ERFOLGREICH am $(date) ---" >> $LOG_FILE
 else
     echo "ERROR" > /var/local/backup_status
-    echo "--- ERROR: Backup FEHLGESCHLAGEN am $(date) ---" >> $LOG_FILE
+    echo "--- ERROR: Backup auf 2. SSD FEHLGESCHLAGEN am $(date) ---" >> $LOG_FILE
 fi
 
-2. Drücken Sie Strg+O -> Enter (Speichern) und Strg+X (Schließen).
-3. Machen Sie das Skript im System ausführbar (wichtig!):
+3. Speichern und Schließen: Strg+O -> Enter -> Strg+X.
+4. Machen Sie das Skript ausführbar:
    sudo chmod +x /usr/local/bin/bmz_backup.sh
-=========================================================================
-SCHRITT 3: DEN NÄCHTLICHEN CRONJOB EINRICHTEN (03:00 UHR)
-=========================================================================
-1. Öffnen Sie den Linux-Terminplaner auf dem Raspberry Pi:
-   sudo crontab -e
-   (Falls Sie gefragt werden, wählen Sie "1" für den nano-Editor).
-   
-2. Scrollen Sie ganz nach unten und fügen Sie diese Zeile als letzte Zeile ein:
-   0 3 * * * /usr/local/bin/bin/bmz_backup.sh >/dev/null 2>&1
-   
-3. Speichern und schließen mit: Strg+O -> Enter -> Strg+X.
-   Das Skript spiegelt die SSD nun ab jetzt jede Nacht um Punkt 03:00 Uhr.
 
 =========================================================================
-SCHRITT 4: TELEGRAF MIT DER BACKUP-DATEI VERKNÜPFEN
+SCHRITT 5: DEN NÄCHTLICHEN CRONJOB SCHARFSCHALTEN
 =========================================================================
-1. Öffnen Sie die Telegraf-Konfigurationsdatei:
+1. Öffnen Sie den Terminplaner:
+   sudo crontab -e
+2. Fügen Sie ganz unten diese Zeile ein:
+   0 3 * * * /usr/local/bin/bmz_backup.sh >/dev/null 2>&1
+3. Speichern und Schließen: Strg+O -> Enter -> Strg+X.
+=========================================================================
+SCHRITT 6: TELEGRAF VERKNÜPFEN
+=========================================================================
+1. Öffnen Sie die Telegraf-Konfiguration:
    sudo nano /etc/telegraf/telegraf.conf
-   
-2. Scrollen Sie ganz nach unten ans Ende der Datei und fügen Sie diesen Block ein:
+2. Scrollen Sie ganz nach unten und fügen Sie diesen Block ein:
 
 [[inputs.file]]
   files = ["/var/local/backup_status"]
@@ -59,37 +80,26 @@ SCHRITT 4: TELEGRAF MIT DER BACKUP-DATEI VERKNÜPFEN
   data_type = "string"
   name_override = "system_backup"
 
-3. Speichern und schließen mit: Strg+O -> Enter -> Strg+X.
-4. Starten Sie Telegraf neu, um die Überwachung scharfzuschalten:
+3. Speichern und Schließen: Strg+O -> Enter -> Strg+X.
+4. Starten Sie Telegraf neu:
    sudo systemctl restart telegraf
-=========================================================================
-SCHRITT 5: DIE NEUE BACKUP-ALARMREGEL ANLEGEN
-=========================================================================
-1. Öffnen Sie Grafana im Webbrowser (http://<IP-des-Pi>:3000).
-2. Klicken Sie in der linken Leiste auf "Alerting" -> "Alert rules".
-3. Klicken Sie oben rechts auf den blauen Button "+ Create alert rule".
-4. Tragen Sie als Namen der Regel ein: Backup_Zentrale_Fehlgeschlagen
 
 =========================================================================
-SCHRITT 6: DIE FORMEL-BEDINGUNG DEFINIEREN (PUNKT 2)
+SCHRITT 7: DIE ALARMREGEL IN GRAFANA ANLEGEN
 =========================================================================
-1. Wählen Sie bei "Data source" Ihre "InfluxDB" aus.
-2. Stellen Sie die Datenabfrage in Zeile "A" wie folgt per Klick ein:
+1. Öffnen Sie Grafana im Browser, gehen Sie auf "Alerting" -> "Alert rules" 
+   und klicken Sie auf "+ Create alert rule".
+2. Name der Regel: Lokales_Backup_SSD_Fehlgeschlagen
+3. Datenabfrage (Query) unten links einstellen:
    - FROM: system_backup
    - SELECT: field(value)
-   
-3. Scrollen Sie ein Stück tiefer zu den mathematischen Blöcken (B, C):
-   - Ändern Sie im Block "C" (Expression) die Bedingung "WHEN" um in: last()
-   - Ändern Sie das mathematische Zeichen um in: IS NOT EQUAL TO
-   - Tragen Sie in das letzte Textfeld exakt in Großbuchstaben ein: SUCCESS
-
-=========================================================================
-SCHRITT 7: BENACHRICHTIGUNG ZUWEISEN & SPEICHERN
-=========================================================================
-1. Scrollen Sie nach unten zu Punkt 4 ("Configure notifications").
-2. Wählen Sie bei "Contact point" Ihre angelegte "Private_Handy_Alarmierung".
-3. Schreiben Sie ganz unten in das Textfeld "Summary" (Beschreibung) rein:
-   🚨 SYSTEM-WARNUNG! Die nächtliche Spiegelung des Leitwarten-Systems auf das 
-   Netzlaufwerk ist fehlgeschlagen! Bitte prüfen Sie umgehend den Speicherplatz 
-   oder die Netzwerkverbindung des Raspberry Pi!
-4. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
+4. Mathematische Bedingung (Expression) im Block C definieren:
+   - WHEN: last()
+   - IS NOT EQUAL TO
+   - Wert eingeben (in Großbuchstaben): SUCCESS
+5. Unter "Configure notifications" Ihren Kontakt "Private_Handy_Alarmierung" wählen.
+6. Schreiben Sie in die "Summary" unten rein:
+   🚨 ZENTRALEN-WARNUNG! Die nächtliche Spiegelung auf die zweite Backup-SSD am 
+   Raspberry Pi ist fehlgeschlagen! Bitte prüfen Sie umgehend, ob die zweite Festplatte 
+   ordnungsgemäß eingesteckt ist oder ob der Speicherplatz erschöpft ist!
+7. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
