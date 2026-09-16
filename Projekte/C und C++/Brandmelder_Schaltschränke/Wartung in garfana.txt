@@ -1,57 +1,47 @@
 =========================================================================
-SCHRITT 1: NEUES WARTUNGS-PANEL ANLEGEN
+SCHRITT 1: DAS ERSTE WARTUNGS-PANEL ERSTELLEN & KONFIGURIEREN
 =========================================================================
-1. Öffnen Sie Ihr funktionierendes Grafana-Dashboard im Webbrowser.
-2. Klicken Sie oben rechts auf das "Panel hinzufügen"-Symbol (Quadrat mit Plus) 
-   und wählen Sie "Add a new panel".
-3. Benennen Sie das Panel im rechten Menü unter "Panel options" -> "Title" um in:
-   Lebensdauer Sensor Schrank 1
-
-=========================================================================
-SCHRITT 2: VISUALISIERUNG ALS FORTSCHRITTSBALKEN WÄHLEN
-=========================================================================
-1. Suchen Sie im rechten Menü unter "Visualizations" nach dem Typ:
-   "Gauge" (Tachometer-Ring) oder "Bar gauge" (Fortschrittsbalken).
-2. Scrollen Sie im rechten Menü nach unten zu "Standard options":
-   - Unit: Wählen Sie "Time" -> "Hours (h)"
-   - Min: Tragen Sie ein: 0
-   - Max: Tragen Sie ein: 17520  (Das entspricht exakt 2 Jahren in Stunden)
-=========================================================================
-SCHRITT 3: DIE MATHEMATISCHE ZEITUHR EINSTELLEN (UNTEN LINKS)
-=========================================================================
-1. Gehen Sie im unteren Bereich des Editors auf den Reiter "Expression" 
-   (oder klicken Sie bei Query auf "+ Expression").
-2. Wählen Sie als Typ (Operation) "Math" aus.
-3. Tragen Sie in das Formelfeld (Expression) exakt diesen Befehl ein:
+1. Erstellen Sie das Panel für Schrank 1 exakt so, wie in der vorherigen 
+   Anleitung in Teil 1 und Teil 2 beschrieben.
+2. Tragen Sie in das Formelfeld (Expression) die Einbauzeit für Schrank 1 ein:
    (time() - 1786960459) / 3600
+3. Klicken Sie oben rechts auf "Apply" und speichern Sie das Dashboard ab.
+
+=========================================================================
+SCHRITT 2: DAS PANEL FÜR SCHRANK 2, 3, 4 etc. KLONEN
+=========================================================================
+1. Klicken Sie bei der fertigen Kachel oben rechts auf die drei kleinen Punkte.
+2. Wählen Sie im Menü den Punkt "More..." -> "Duplicate" (Duplizieren).
+3. Es erscheint sofort eine exakte Kopie der Kachel direkt daneben.
+4. Klicken Sie bei der neuen Kopie auf die drei Punkte und wählen Sie "Edit".
+=========================================================================
+SCHRITT 3: DEN INDIVIDUELLEN ZEITSTEMPEL EINTRAGEN
+=========================================================================
+1. Ändern Sie im rechten Einstellungsmenü ganz oben den Titel (Title) um von 
+   "Lebensdauer Sensor Schrank 1 (Copy)" in:
+   Lebensdauer Sensor Schrank 2
    
-   *WICHTIG*: Die lange Zahl im Code (1786960459) ist der sogenannte 
-   Unix-Zeitstempel des Einbautages. Wenn Sie den Sensor zuhause einbauen, 
-   holen Sie sich den aktuellen Sekundenwert einfach von Webseiten wie 
-   "unixtime.de" und ersetzen diese Beispielzahl durch Ihren echten Wert!
+2. Gehen Sie nun unten links wieder in das mathematische Formelfeld (Expression).
+3. Ersetzen Sie die lange Zahl durch den Unix-Zeitstempel des Tages, an dem 
+   dieser spezifische Sensor in Schrank 2 eingebaut wurde:
+   (time() - 1789571200) / 3600
+   
+   *PROFI-TIPP*: Um den genauen Sekundenwert für den Einbautag zu erhalten, 
+   öffnen Sie am PC einfach die Webseite "unixtime.de". Tippen Sie dort das 
+   Datum und die Uhrzeit des Einbaus ein und klicken Sie auf "Konvertieren". 
+   Die Seite spuckt Ihnen sofort die passende 10-stellige Zahl aus.
 
-4. Grafana zieht nun jede Sekunde das Einbaudatum vom aktuellen Tag ab 
-   und teilt es durch 3600, um die echten, unendlichen Betriebsstunden zu 
-   berechnen - völlig ohne Daten aus der InfluxDB zu benötigen!
+4. Klicken Sie oben rechts auf "Apply". Schrank 2 zählt ab jetzt vollkommen 
+   unabhängig von Schrank 1 seine eigenen Betriebsstunden herunter!
 =========================================================================
-SCHRITT 4: DIE ALARM-FARBEN FÜR DEN SENSOR VERGEBEN (RECHTES MENÜ)
+SCHRITT 4: DEN INDIVIDUELLEN ALARM AKTIVIEREN
 =========================================================================
-1. Scrollen Sie im rechten Menü nach unten zum Bereich "Thresholds".
-2. Stellen Sie die Grenzwerte für die 2 Jahre Lebensdauer ein:
-   - Base (0 bis 15.000 Stunden): Wählen Sie ein beruhigendes GRÜN.
-   - Klicken Sie auf "+ Add threshold": Tragen Sie "15000" ein (ca. 1,7 Jahre) 
-     und wählen Sie GELB (Wartung rückt näher).
-   - Klicken Sie erneut auf "+ Add threshold": Tragen Sie "17520" ein (Genau 2 Jahre) 
-     und wählen Sie ein leuchtendes ROT (Sensor jetzt tauschen!).
-
-=========================================================================
-SCHRITT 5: DEN AUTOMATISCHEN WARTUNGS-ALARM AKTIVIEREN
-=========================================================================
-1. Klicken Sie im Panel-Editor oben auf den Reiter "Alert" und danach 
-   auf "Create alert rule from this panel".
-2. Tragen Sie als Namen ein: Wartung_Sensor_Schrank_1
-3. Stellen Sie die Bedingung im mathematischen Bereich (Expression) ein auf:
-   IS ABOVE -> 17520
-4. Wählen Sie ganz unten unter "Notifications" bei "Contact point" wieder Ihren 
-   erstellten Kontakt: Private_Handy_Alarmierung
-5. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
+1. Klicken Sie im geöffneten Editor von Schrank 2 oben auf den Reiter "Alert".
+2. Klicken Sie auf "Create alert rule from this panel".
+3. Tragen Sie als Namen der Alarmregel ein: 
+   Wartung_Sensor_Schrank_2
+4. Stellen Sie bei der Bedingung (Expression) ein: IS ABOVE -> 17520
+5. Schreiben Sie ganz unten in das Textfeld "Summary" (Beschreibung) hinein:
+   Der Sensor in Schaltschrank 2 hat seine Lebensdauer von 2 Jahren erreicht!
+6. Wählen Sie unter "Contact point" wieder Ihre "Private_Handy_Alarmierung".
+7. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
