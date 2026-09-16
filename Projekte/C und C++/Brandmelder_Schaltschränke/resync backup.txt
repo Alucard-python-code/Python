@@ -1,0 +1,95 @@
+=========================================================================
+SCHRITT 1: DAS SPIEGELUNGS-SKRIPT ERSTELLEN
+=========================================================================
+1. Öffnen Sie das Terminal Ihres Raspberry Pi (z. B. via SSH).
+2. Erstellen Sie eine neue Skript-Datei im Systemordner:
+   sudo nano /usr/local/bin/bmz_backup.sh
+
+=========================================================================
+SCHRITT 2: DEN CODE IN DIE DATEI KOPIEREN
+=========================================================================
+1. Kopieren Sie den folgenden Code-Block vollständig in das nano-Fenster:
+
+#!/bin/bash
+BACKUP_DIR="/mnt/backup_leitung"
+LOG_FILE="/var/log/bmz_backup.log"
+
+echo "--- Backup gestartet am $(date) ---" >> $LOG_FILE
+
+# rsync spiegelt hocheffizient nur veränderte Dateien
+rsync -av --delete /var/lib/influxdb/ $BACKUP_DIR/influxdb/ >> $LOG_FILE 2>&1
+rsync -av --delete /var/lib/grafana/ $BACKUP_DIR/grafana/ >> $LOG_FILE 2>&1
+rsync -av --delete /etc/telegraf/ $BACKUP_DIR/telegraf/ >> $LOG_FILE 2>&1
+
+if [ $? -eq 0 ]; then
+    echo "SUCCESS" > /var/local/backup_status
+    echo "--- Backup ERFOLGREICH am $(date) ---" >> $LOG_FILE
+else
+    echo "ERROR" > /var/local/backup_status
+    echo "--- ERROR: Backup FEHLGESCHLAGEN am $(date) ---" >> $LOG_FILE
+fi
+
+2. Drücken Sie Strg+O -> Enter (Speichern) und Strg+X (Schließen).
+3. Machen Sie das Skript im System ausführbar (wichtig!):
+   sudo chmod +x /usr/local/bin/bmz_backup.sh
+=========================================================================
+SCHRITT 3: DEN NÄCHTLICHEN CRONJOB EINRICHTEN (03:00 UHR)
+=========================================================================
+1. Öffnen Sie den Linux-Terminplaner auf dem Raspberry Pi:
+   sudo crontab -e
+   (Falls Sie gefragt werden, wählen Sie "1" für den nano-Editor).
+   
+2. Scrollen Sie ganz nach unten und fügen Sie diese Zeile als letzte Zeile ein:
+   0 3 * * * /usr/local/bin/bin/bmz_backup.sh >/dev/null 2>&1
+   
+3. Speichern und schließen mit: Strg+O -> Enter -> Strg+X.
+   Das Skript spiegelt die SSD nun ab jetzt jede Nacht um Punkt 03:00 Uhr.
+
+=========================================================================
+SCHRITT 4: TELEGRAF MIT DER BACKUP-DATEI VERKNÜPFEN
+=========================================================================
+1. Öffnen Sie die Telegraf-Konfigurationsdatei:
+   sudo nano /etc/telegraf/telegraf.conf
+   
+2. Scrollen Sie ganz nach unten ans Ende der Datei und fügen Sie diesen Block ein:
+
+[[inputs.file]]
+  files = ["/var/local/backup_status"]
+  data_format = "value"
+  data_type = "string"
+  name_override = "system_backup"
+
+3. Speichern und schließen mit: Strg+O -> Enter -> Strg+X.
+4. Starten Sie Telegraf neu, um die Überwachung scharfzuschalten:
+   sudo systemctl restart telegraf
+=========================================================================
+SCHRITT 5: DIE NEUE BACKUP-ALARMREGEL ANLEGEN
+=========================================================================
+1. Öffnen Sie Grafana im Webbrowser (http://<IP-des-Pi>:3000).
+2. Klicken Sie in der linken Leiste auf "Alerting" -> "Alert rules".
+3. Klicken Sie oben rechts auf den blauen Button "+ Create alert rule".
+4. Tragen Sie als Namen der Regel ein: Backup_Zentrale_Fehlgeschlagen
+
+=========================================================================
+SCHRITT 6: DIE FORMEL-BEDINGUNG DEFINIEREN (PUNKT 2)
+=========================================================================
+1. Wählen Sie bei "Data source" Ihre "InfluxDB" aus.
+2. Stellen Sie die Datenabfrage in Zeile "A" wie folgt per Klick ein:
+   - FROM: system_backup
+   - SELECT: field(value)
+   
+3. Scrollen Sie ein Stück tiefer zu den mathematischen Blöcken (B, C):
+   - Ändern Sie im Block "C" (Expression) die Bedingung "WHEN" um in: last()
+   - Ändern Sie das mathematische Zeichen um in: IS NOT EQUAL TO
+   - Tragen Sie in das letzte Textfeld exakt in Großbuchstaben ein: SUCCESS
+
+=========================================================================
+SCHRITT 7: BENACHRICHTIGUNG ZUWEISEN & SPEICHERN
+=========================================================================
+1. Scrollen Sie nach unten zu Punkt 4 ("Configure notifications").
+2. Wählen Sie bei "Contact point" Ihre angelegte "Private_Handy_Alarmierung".
+3. Schreiben Sie ganz unten in das Textfeld "Summary" (Beschreibung) rein:
+   🚨 SYSTEM-WARNUNG! Die nächtliche Spiegelung des Leitwarten-Systems auf das 
+   Netzlaufwerk ist fehlgeschlagen! Bitte prüfen Sie umgehend den Speicherplatz 
+   oder die Netzwerkverbindung des Raspberry Pi!
+4. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
