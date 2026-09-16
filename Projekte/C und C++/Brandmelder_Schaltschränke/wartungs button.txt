@@ -1,0 +1,59 @@
+=========================================================================
+SCHRITT 1: DAS ALARM-STUMMSCHALTUNGS-MENÜ ÖFFNEN
+=========================================================================
+1. Öffnen Sie Grafana in Ihrem Webbrowser und loggen Sie sich ein.
+2. Klicken Sie in der linken Seitenleiste auf das Glocken- oder Warnsymbol 
+   ("Alerting").
+3. Wählen Sie im Untermenü den Punkt "Mute timings" (Stummschaltungen).
+4. Klicken Sie oben rechts auf den blauen Button "+ Add mute timing".
+
+=========================================================================
+SCHRITT 2: DEN WARTUNGSMODUS-SCHALTER DEFINIEREN
+=========================================================================
+1. Tragen Sie im Feld "Name" exakt diese Bezeichnung ein:
+   Systempruefung_Wartung
+   
+2. Die Felder unter "Time range" (Zeitzone, Wochentage, Stunden) lassen Sie 
+   für den manuellen Testbetrieb komplett LEER! 
+   (Dadurch gilt die Stummschaltung sofort dauerhaft, sobald wir sie im 
+   nächsten Schritt aktivieren).
+3. Klicken Sie ganz unten auf den blauen Button "Save mute timing".
+=========================================================================
+SCHRITT 3: DIE BENACHRICHTIGUNGS-RICHTLINIEN ÖFFNEN
+=========================================================================
+1. Klicken Sie im linken "Alerting"-Menü auf "Notification policies" 
+   (Benachrichtigungsrichtlinien).
+2. Suchen Sie in der Liste Ihre Haupt-Richtlinie (Root Policy), die Ihre 
+   E-Mails an die "Private_Handy_Alarmierung" sendet.
+3. Klicken Sie ganz rechts in dieser Zeile auf den Button "Edit" (Stift-Symbol).
+
+=========================================================================
+SCHRITT 4: DIE VERKNÜPFUNG SCHARFSCHALTEN
+=========================================================================
+1. Scrollen Sie im geöffneten Bearbeitungsfenster nach unten zum Bereich 
+   "Mute timings".
+2. Klicken Sie in das Dropdown-Feld und wählen Sie Ihren soeben erstellten 
+   Eintrag aus: Systempruefung_Wartung
+3. Klicken Sie ganz unten auf den blauen Button "Save policy".
+=========================================================================
+SCHRITT 5: DAS SYSTEM VOR DEM PRÜFSPRAY-TEST STUMMSCHALTEN
+=========================================================================
+1. Wenn Sie die Anlage vor Ihrem Chef prüfen wollen, gehen Sie am PC auf:
+   Alerting -> Mute timings.
+2. Klicken Sie neben "Systempruefung_Wartung" auf "Edit".
+3. Wenn Sie die Prüfung jetzt durchführen, lassen Sie es leer (aktiviert). 
+   Solange dieser Eintrag mit der Policy verknüpft ist, fängt Grafana alle 
+   Alarm-Mails im Hintergrund ab!
+4. Sprühen Sie das CO-Testgas in das Ansaugsieb. Der PPM-Wert schießt auf dem 
+   Leitwarten-Monitor rot nach oben - aber Ihr Smartphone bleibt absolut still!
+
+=========================================================================
+SCHRITT 6: DAS SYSTEM NACH DEM TEST WIEDER SCHARFSCHALTEN
+=========================================================================
+1. Sobald der Test vorbei ist und sich der PPM-Wert im Schrank wieder normalisiert hat:
+2. Gehen Sie im linken Menü wieder auf "Notification policies" -> "Edit".
+3. Scrollen Sie nach unten zu "Mute timings" und klicken Sie auf das kleine 
+   "X" neben "Systempruefung_Wartung", um es aus der Zeile zu entfernen.
+4. Klicken Sie auf "Save policy".
+5. Das System ist ab genau dieser Sekunde wieder zu 100% scharfgeschaltet 
+   und sendet bei echten Bränden oder Störungen sofort E-Mails an Ihr Handy!
