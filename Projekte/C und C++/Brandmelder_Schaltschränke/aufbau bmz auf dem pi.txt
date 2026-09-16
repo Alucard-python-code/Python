@@ -1,0 +1,127 @@
+# =========================================================================
+# SCHRITT 1: MOSQUITTO MQTT-BROKER INSTALLIEREN & ABSICHERN
+# =========================================================================
+
+# System aktualisieren und Mosquitto installieren
+sudo apt update && sudo apt upgrade -y
+sudo apt install mosquitto mosquitto-clients -y
+
+# MQTT-Benutzer anlegen (Ersetzen Sie 'pico_user' durch Ihren Wunschnamen)
+# Das Terminal wird Sie nach dem Ausführen nach einem Passwort fragen!
+sudo mosquitto_passwd /etc/mosquitto/passwd pico_user
+
+# Passwort-Pflicht in der Konfiguration erzwingen
+# Wir schreiben die Absicherung direkt ans Ende der Konfigurationsdatei
+sudo bash -c 'cat << EOF >> /etc/mosquitto/mosquitto.conf
+allow_anonymous false
+password_file /etc/mosquitto/passwd
+EOF'
+
+# Mosquitto-Dienst aktivieren und neu starten
+sudo systemctl enable mosquitto
+sudo systemctl restart mosquitto
+
+
+# =========================================================================
+# SCHRITT 2: INFLUXDB INSTALLIEREN & DATA RETENTION (6 MONATE) EINRICHTEN
+# =========================================================================
+
+# InfluxDB Repository Schlüssel und Paketquelle hinzufügen
+wget -q https://influxdata.com
+echo 'deb [signed-by=/etc/apt/trusted.gpg.d/influxdata-archive_compat.key] https://influxdata.com stable main' | sudo tee /etc/apt/sources.list.d/influxdata.list
+
+# InfluxDB installieren
+sudo apt update && sudo apt install influxdb -y
+
+# Dienst starten und für den Systemstart aktivieren
+sudo systemctl enable influxdb
+sudo systemctl start influxdb
+
+# Leere Brandmelde-Datenbank "bmz" erstellen
+influx -execute "CREATE DATABASE bmz"
+
+# Aufbewahrungsregel aktivieren: Alles, was älter als 26 Wochen (1/2 Jahr) ist, fliegt raus!
+influx -execute "ALTER RETENTION POLICY \"autogen\" ON \"bmz\" DURATION 26w REPLICATION 1 DEFAULT"
+# =========================================================================
+# SCHRITT 3: TELEGRAF INSTALLIEREN & KONFIGURIEREN
+# =========================================================================
+
+# Telegraf installieren
+sudo apt install telegraf -y
+
+# Die alte Standard-Konfiguration löschen, um sie neu aufzusetzen
+sudo rm /etc/telegraf/telegraf.conf
+
+# Neue, saubere Konfigurationsdatei schreiben
+# WICHTIG: Ersetzen Sie unten bei 'username' und 'password' genau die Daten,
+# die Sie in Schritt 1 für Ihre Picos vergeben haben!
+sudo bash -c 'cat << EOF > /etc/telegraf/telegraf.conf
+[agent]
+  interval = "1s"
+  round_interval = true
+  metric_batch_size = 1000
+  metric_buffer_limit = 10000
+  collection_jitter = "0s"
+  flush_interval = "1s"
+  flush_jitter = "0s"
+  precision = ""
+  hostname = ""
+  omit_hostname = true
+
+[[outputs.influxdb]]
+  urls = ["http://127.0.0.1:8086"]
+  database = "bmz"
+
+[[inputs.mqtt_consumer]]
+  servers = ["tcp://127.0.0.1:1883"]
+  topics = ["schaltschrank/messung"]
+  username = "pico_user"       # Hier Ihren MQTT-Namen eintragen
+  password = "pico_password"   # Hier Ihr MQTT-Passwort eintragen
+  data_format = "json"
+  json_string_fields = ["ip", "name"]
+EOF'
+
+# Telegraf-Dienst aktivieren und starten
+sudo systemctl enable telegraf
+sudo systemctl start telegraf
+# =========================================================================
+# SCHRITT 4: GRAFANA INSTALLIEREN & KIOSK-MODUS AKTIVIEREN
+# =========================================================================
+
+# Grafana-Paketquelle hinzufügen
+wget -q -O - https://grafana.com | gnu_gpg --dearmor | sudo tee /usr/share/keyrings/grafana.gpg > /dev/null
+echo "deb [signed-by=/usr/share/keyrings/grafana.gpg] https://grafana.com stable main" | sudo tee /etc/apt/sources.list.d/grafana.list
+
+# Grafana installieren
+sudo apt update && sudo apt install grafana -y
+
+# Grafana-Konfiguration anpassen für automatischen, passwortfreien Lese-Login (Kiosk-Monitor)
+sudo sed -i 's/;enabled = false/enabled = true/g' /etc/grafana/grafana.ini
+sudo sed -i 's/;org_name = Main Org./org_name = Main Org./g' /etc/grafana/grafana.ini
+sudo sed -i 's/;org_role = Viewer/org_role = Viewer/g' /etc/grafana/grafana.ini
+
+# Grafana-Server starten und aktivieren
+sudo systemctl enable grafana-server
+sudo systemctl start grafana-server
+
+
+# =========================================================================
+# SCHRITT 5: AUTOMATISCHEN BROWSER-START (KIOSK) EINRICHTEN
+# =========================================================================
+
+# Autostart-Ordner im Linux-Benutzerprofil anlegen, falls noch nicht vorhanden
+mkdir -p ~/.config/autostart
+
+# Autostart-Datei für das automatische Vollbild-Dashboard erstellen
+# HINWEIS: Sobald Sie Ihr Dashboard in Grafana gebaut haben, kopieren Sie die 
+# Dashboard-URL aus der Browserzeile und ersetzen die URL unten nach 'exec='!
+nano ~/.config/autostart/grafana_kiosk.desktop
+
+# --- Kopieren Sie die folgenden 5 Zeilen in das geöffnete nano-Fenster: ---
+# [Desktop Entry]
+# Type=Application
+# Name=Grafana Kiosk
+# Exec=chromium-browser --noerrdialogs --disable-infobars --kiosk http://localhost:3000/d/ihre-dashboard-uid?kiosk=tv
+# X-GNOME-Autostart-enabled=true
+# -------------------------------------------------------------------------
+# Speichern im nano-Editor: Strg+O -> Enter -> Schließen mit Strg+X
