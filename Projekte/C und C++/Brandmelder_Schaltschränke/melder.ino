@@ -3,6 +3,7 @@
 #include <PubSubClient.h>
 #include <EEPROM.h>
 
+
 // --- NETZWERK STANDARDWERTE ---
 byte mac[] = { 0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0x01 };
 
