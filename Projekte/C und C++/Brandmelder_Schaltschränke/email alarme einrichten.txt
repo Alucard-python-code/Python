@@ -1,0 +1,74 @@
+=========================================================================
+SCHRITT 1: SMTP-VERSAND AUF DEM RASPBERRY PI FREISCHALTEN
+=========================================================================
+1. Öffnen Sie das Terminal Ihres Raspberry Pi (z. B. via SSH).
+2. Öffnen Sie die Grafana-Konfigurationsdatei:
+   sudo nano /etc/grafana/grafana.ini
+3. Suchen Sie mit "Strg+W" nach dem Begriff: [smtp]
+4. Ändern Sie die Zeilen in diesem Block exakt wie folgt ab (entfernen Sie 
+   jeweils das Semikolon ";" am Zeilenanfang, um die Zeile zu aktivieren):
+
+   [smtp]
+   enabled = true
+   host = smtp.dein-anbieter.de:587   # Z. B. ://gmail.com
+   user = deine-alarm-adresse@domain.de
+   password = """DEIN_APP_PASSWORT""" # Ihr geheimes Mail-Passwort
+   from_address = deine-alarm-adresse@domain.de
+   from_name = Grafana BMZ Zentrale
+
+5. Speichern Sie im nano-Editor: Strg+O -> Enter -> Schließen mit Strg+X.
+6. Starten Sie den Grafana-Server neu, damit er die Maildaten lädt:
+   sudo systemctl restart grafana-server
+=========================================================================
+SCHRITT 2: IHR PRIVATE EMÄIL-ADRESSE ALS "CONTACT POINT" HINTERLEGEN
+=========================================================================
+1. Öffnen Sie Grafana im Browser (http://<IP-des-Pi>:3000) und loggen Sie sich ein.
+2. Klicken Sie in der linken Seitenleiste auf das Glocken-Symbol ("Alerting") 
+   Anmerkung: In neueren Versionen ein dreieckiges Warnsymbol.
+3. Wählen Sie im Untermenü den Punkt "Contact points" (Kontaktpunkte).
+4. Klicken Sie oben rechts auf den blauen Button "+ Add contact point".
+5. Nehmen Sie folgende Einstellungen vor:
+   - Name: Private_Handy_Alarmierung
+   - Integration: Wählen Sie aus der Liste "Email" aus.
+   - Addresses: Tragen Sie Ihre private E-Mail-Adresse ein, auf der der Alarm landen soll.
+6. Klicken Sie ganz unten auf den blauen Button "Save contact point".
+
+=========================================================================
+SCHRITT 3: TEST-E-MAIL ABSETZEN
+=========================================================================
+1. Klicken Sie in der Liste neben Ihrem neu angelegten Kontaktpunkt auf "Edit" (Stift-Symbol).
+2. Klicken Sie oben rechts auf den Button "Test".
+3. Klicken Sie auf "Send test notification". 
+4. Schauen Sie auf Ihr Smartphone: Sie sollten binnen Sekunden eine Test-E-Mail 
+   von Ihrer Grafana-Zentrale erhalten haben!
+=========================================================================
+SCHRITT 4: DIE ALARM-REGEL (ALERT RULE) ERSTELLEN
+=========================================================================
+1. Klicken Sie im linken "Alerting"-Menü auf "Alert rules" (Alarmregeln).
+2. Klicken Sie oben rechts auf "+ Create alert rule".
+3. Tragen Sie unter Punkt 1 ("Enter alert rule name") ein: 
+   Schmorbrand_PV_Schrank
+
+=========================================================================
+SCHRITT 5: DIE DATEN QUERIES HINTERLEGEN (PUNKT 2)
+=========================================================================
+1. Wählen Sie bei "Data source" Ihre verknüpfte "InfluxDB" aus.
+2. Stellen Sie die Abfrage exakt wie beim Dashboard ein:
+   - FROM: mqtt_consumer
+   - WHERE: ip = 192.168.178.101 (Die IP des zu überwachenden Picos)
+   - SELECT: field(ppm)
+3. Scrollen Sie ein Stück tiefer zu den mathematischen Blöcken (B, C):
+   - Ändern Sie im Block "C" (Expression) die Bedingung "WHEN" um in: last()
+   - Ändern Sie das mathematische Zeichen um in: IS ABOVE
+   - Tragen Sie in das letzte Feld Ihren Alarmwert ein: 400
+
+=========================================================================
+SCHRITT 6: ZEITFENSTER & ABSCHLUSS (PUNKT 3 BIS 5)
+=========================================================================
+1. Scrollen Sie zu Punkt 3 ("Set alert evaluation behavior"):
+   - Setzen Sie "For" auf: 5s (Der Wert muss 5 Sekunden lang über 400 sein, 
+     das filtert kurze Messspitzen/Fehlalarme perfekt aus).
+2. Scrollen Sie zu Punkt 4 ("Configure notifications"):
+   - Wählen Sie bei "Contact point" Ihren erstellten Punkt: Private_Handy_Alarmierung
+3. Scrollen Sie ganz nach oben oder unten und klicken Sie auf den blauen 
+   Button "Save rule and exit" oben rechts.

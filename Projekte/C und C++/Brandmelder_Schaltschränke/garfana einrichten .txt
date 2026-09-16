@@ -1,0 +1,93 @@
+=========================================================================
+SCHRITT 1: ERSTMALIGES EINLOGGEN & PASSWORT ÄNDERN
+=========================================================================
+1. Öffnen Sie am PC einen Webbrowser und rufen Sie die IP Ihres Raspberry Pi 
+   auf Port 3000 auf (z. B. http://192.168.178.200:3000).
+2. Melden Sie sich mit den Grafana-Standarddaten an:
+   - Username: admin
+   - Password: admin
+3. Vergeben Sie im nächsten Fenster sofort Ihr neues, sicheres Wunsch-Passwort.
+
+=========================================================================
+SCHRITT 2: DATENQUELLE (INFLUXDB) HINZUFÜGEN
+=========================================================================
+1. Klicken Sie in der linken Seitenleiste auf das Zahnrad-Symbol ("Connections")
+   und wählen Sie "Data Sources".
+2. Klicken Sie auf den blauen Button "Add data source".
+3. Suchen Sie in der Suchzeile nach "InfluxDB" und klicken Sie darauf.
+
+=========================================================================
+SCHRITT 3: INFLUXDB PARAMETER EINTRAGEN
+=========================================================================
+1. Wählen Sie bei "Query Language" unbedingt "InfluxQL" aus.
+2. Scrollen Sie zum Bereich "HTTP" und tragen Sie bei URL ein:
+   http://localhost:8086
+3. Scrollen Sie nach unten zum Bereich "InfluxDB Details":
+   - Database: bmz
+   - User: [komplett leer lassen]
+   - Password: [komplett leer lassen]
+4. Klicken Sie ganz unten auf den blauen Button "Save & Test".
+5. Es MUSS eine grüne Erfolgsmeldung erscheinen: "Data source is working".
+=========================================================================
+SCHRITT 4: NEUES DASHBOARD & ERSTES PANEL ANLEGEN
+=========================================================================
+1. Klicken Sie in der linken Seitenleiste auf das "+" (Plus-Symbol) und 
+   wählen Sie "New Dashboard".
+2. Klicken Sie in der Mitte auf den Button "Add a new panel".
+
+=========================================================================
+SCHRITT 5: ANZEIGEFORM WÄHLEN (RECHTES MENÜ)
+=========================================================================
+1. Suchen Sie im rechten Menü unter "Visualizations" nach dem Typ "Stat" 
+   (das Symbol mit der großen Zahl) und klicken Sie darauf.
+2. Scrollen Sie im rechten Menü ganz nach oben und tragen Sie unter "Title" 
+   den Namen Ihres ersten Schaltschranks ein (z. B. "PV-Wechselrichter").
+
+=========================================================================
+SCHRITT 6: DATEN-ABFRAGE (QUERY) EINSTELLEN (UNTEN LINKS)
+=========================================================================
+1. Suchen Sie die Zeile, die mit "A" beginnt (die Datenabfrage).
+2. Klicken Sie bei "FROM" auf "select measurement" und wählen Sie: mqtt_consumer
+3. Klicken Sie bei "WHERE" auf das "+", wählen Sie "ip" und wählen Sie die 
+   IP Ihres ersten Picos aus (z. B. = 192.168.178.101).
+4. Klicken Sie bei "SELECT" auf "field(value)" und ändern Sie "value" um in: ppm
+
+=========================================================================
+SCHRITT 7: FARB-AMPEL & ALARMWERT DEFINIEREN (RECHTES MENÜ)
+=========================================================================
+1. Scrollen Sie im rechten Menü nach unten zum Bereich "Thresholds" (Schwellenwerte).
+2. Stellen Sie den Standardwert ein:
+   - Base (Ruhezustand): Wählen Sie ein sattes GRÜN.
+3. Klicken Sie auf "+ Add threshold" (Erste leichte Gaskonzentration):
+   - Tragen Sie den Wert "350" ein und wählen Sie GELB.
+4. Klicken Sie erneut auf "+ Add threshold" (Kritischer Schmorbrand):
+   - Tragen Sie den Wert "400" ein und wählen Sie ein leuchtendes ROT.
+5. Klicken Sie oben rechts auf den blauen Button "Apply". Ihre erste Kachel steht!
+
+*Hinweis*: Wiederholen Sie die Schritte 2 bis 7 für alle weiteren Schränke (mit 
+deren jeweiligen IPs) sowie für die Lüfterdrehzahlen (indem Sie bei SELECT "rpm" wählen).
+=========================================================================
+SCHRITT 8: DASHBOARD SPEICHERN
+=========================================================================
+1. Klicken Sie oben rechts auf das Disketten-Symbol ("Save dashboard").
+2. Vergeben Sie einen Namen (z. B. "BMZ_Gesamtueberwachung") und klicken Sie auf "Save".
+
+=========================================================================
+SCHRITT 9: DIE KIOSK-URL FÜR DEN AUTOSTART ERZEUGEN
+=========================================================================
+1. Drücken Sie auf Ihrer PC-Tastatur jetzt nacheinander die Tasten "d" und "k" 
+   (Alternativ: Klicken Sie oben rechts auf das Monitor-Symbol "Cycle view mode").
+2. Alle Menüleisten und Seitenränder von Grafana verschwinden nun vollständig. 
+   Es ist nur noch die reine, saubere Überwachungsoberfläche zu sehen.
+3. Klicken Sie oben in die Adresszeile Ihres Webbrowsers und kopieren Sie die 
+   gesamte URL. Diese sieht ungefähr so aus:
+   http://192.168.178
+4. Öffnen Sie das Terminal Ihres Raspberry Pi und fügen Sie genau diese kopierte 
+   URL in Ihre Autostart-Datei ein:
+   nano ~/.config/autostart/grafana_kiosk.desktop
+5. Ersetzen Sie dort die Zeile "Exec=..." durch Ihre kopierte URL.
+6. Drücken Sie Strg+O (Speichern) -> Enter -> Strg+X (Schließen).
+
+Wenn Sie den Raspberry Pi jetzt neu starten, fährt das Linux-System hoch und öffnet 
+nach wenigen Sekunden vollautomatisch Ihr wunderschönes, glühendes Grafana-Dashboard 
+im absoluten Vollbildmodus auf dem angeschlossenen Monitor!
