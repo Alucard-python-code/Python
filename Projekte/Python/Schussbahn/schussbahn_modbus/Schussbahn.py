@@ -124,24 +124,42 @@ class SchussbahnApp(QWidget):
             self.status_msg.setStyleSheet("color: #ffaa00; background-color: #111111; padding: 6px; border-radius: 6px;")
             self.status_msg.setText(f"Modus: {effektiver_modus} läuft...")
 
-        self.drive_thread = DriveThread(mode=effektiver_modus, client_dummy=None, times=self.times, ist_referenziert=self.ist_referenziert)
-        self.drive_thread.status_signal.connect(self.update_status)
-        self.drive_thread.error_signal.connect(self.fahrt_abgebrochen_fehler)
-        self.drive_thread.io_update_signal.connect(self.handle_thread_io_update)
-        self.drive_thread.drive_time_signal.connect(self.tracker.add_drive_time)
+        try:
+            # WICHTIG: client_dummy=None wird übergeben. 
+            self.drive_thread = DriveThread(mode=effektiver_modus, client_dummy=None, times=self.times, ist_referenziert=self.ist_referenziert)
+            self.drive_thread.status_signal.connect(self.update_status)
+            self.drive_thread.error_signal.connect(self.fahrt_abgebrochen_fehler)
+            self.drive_thread.io_update_signal.connect(self.handle_thread_io_update)
+            self.drive_thread.drive_time_signal.connect(self.tracker.add_drive_time)
 
-        if hasattr(self, 'settings_window') and self.settings_window:
-            self.drive_thread.io_update_signal.connect(self.settings_window.update_live_ios_safe)
+            if hasattr(self, 'settings_window') and self.settings_window:
+                self.drive_thread.io_update_signal.connect(self.settings_window.update_live_ios_safe)
 
-        self.drive_thread.finished_signal.connect(self.home_fahrt_erfolgreich if effektiver_modus == "HomeFahrt" else self.drive_finished)
-        self.drive_thread.start()
+            # Verwende hier NUR noch den sicheren Funktionstext ohne direkte Verknüpfung von unvollständigen Callbacks
+            if effektiver_modus == "HomeFahrt":
+                self.drive_thread.finished_signal.connect(self.home_fahrt_erfolgreich)
+            else:
+                self.drive_thread.finished_signal.connect(self.drive_finished)
+                
+            self.drive_thread.start()
+        except Exception as thread_error:
+            print(f"Kritischer Fehler beim Thread-Start: {thread_error}")
+            self.is_driving = False
+            self.safety.handle_system_error(f"FEHLER: Thread-Start fehlgeschlagen! {thread_error}")
+
 
     def home_fahrt_erfolgreich(self):
         self.blink_timer.stop()
         self.ist_referenziert = True
         self.status_msg.setStyleSheet("color: #00ff00; background-color: #111111; padding-left: 15px; border-radius: 6px;")
         self.status_msg.setText("zur Auswertung bereit")
-        self.drive_finished()
+        # Rufe die Beendigung sauber auf:
+        self.animation.stop()
+        self.is_driving = False
+        if self.exit_requested: 
+            self.close_program_safely()
+        else: 
+            self.central_monitor_timer.start(250)
 
     def fahrt_abgebrochen_fehler(self, error_msg):
         self.blink_timer.stop()

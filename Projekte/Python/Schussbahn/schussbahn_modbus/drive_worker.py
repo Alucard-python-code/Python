@@ -30,21 +30,32 @@ class DriveThread(QThread):
         self.ipc_port = 65432
 
     def communicate_with_backend(self, relays_to_write):
-        """Sendet Relais-Zustände an das Backend und holt die 8 Eingänge ab."""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(0.1) # Sehr kurzer Timeout, da lokal auf dem Pi
-                s.connect((self.ipc_host, self.ipc_port))
-                
-                payload = {"set_relays": relays_to_write}
-                s.sendall(json.dumps(payload).encode('utf-8'))
-                
-                response = s.recv(1024).decode('utf-8')
-                data = json.loads(response)
-                return data.get("inputs", [False] * 8)
-        except Exception as e:
-            # Wenn das Backend nicht antwortet, werfen wir einen Kommunikationsfehler
-            raise Exception(f"IPC-Hintergrunddienst nicht erreichbar: {e}")
+        """Sendet Relais-Zustände an das Backend und holt die 8 Eingänge ab (mit sicheren Retries)."""
+        max_retries = 4
+        for attempt in range(max_retries):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.settimeout(0.15) # Leicht erhöht für stabilere Handshakes
+                    s.connect((self.ipc_host, self.ipc_port))
+                    
+                    payload = {"set_relays": relays_to_write}
+                    s.sendall(json.dumps(payload).encode('utf-8'))
+                    
+                    response = s.recv(1024).decode('utf-8')
+                    if not response:
+                        raise socket.error("Leere Antwort vom Server")
+                        
+                    data = json.loads(response)
+                    return data.get("inputs", [False] * 8)
+                    
+            except (socket.error, json.JSONDecodeError) as e:
+                # Bei schnellen Abfolgen kurz warten und erneut versuchen
+                if attempt < max_retries - 1:
+                    time.sleep(0.04) # 40ms Puffer geben, damit sich der Server fängt
+                    continue
+                else:
+                    # Erst nach dem 4. Fehlschlag werfen wir den Fehler
+                    raise Exception(f"IPC-Hintergrunddienst nicht erreichbar: {e}")
 
     def write_hardware_coil(self, kanal, zustand):
         """Setzt den Zustand für ein Relais im lokalen Array und sendet es."""
@@ -138,7 +149,7 @@ class DriveThread(QThread):
                 self.write_hardware_coil(3, True)
                 self.status_signal.emit("Wertung: Schnellphase")
 
-                end_time_schnell = time.time() + self.times.get("Wertung Schnell", 2.5)
+                end_time_schnell = time.time() + self.times.get("Wertung Schnell")
                 while time.time() < end_time_schnell:
                     check_watchdog()
                     self.check_inputs_during_flight()
@@ -153,12 +164,31 @@ class DriveThread(QThread):
 
                 while self._is_running:
                     check_watchdog()
-                    self.check_inputs_during_flight()
+                    
+                    # 1. Eingänge frisch vom Waveshare-Board abfragen
+                    try:
+                        self.latest_inputs = self.communicate_with_backend(self.current_relays)
+                    except Exception as e:
+                        print(f"Modbus-Puffer fängt Waveshare-Fehler ab: {e}")
+                        time.sleep(0.05)
+                        continue
 
-                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
-                        if self.latest_inputs[1] == True:
+                    # 2. Sicherheits-Check: Motorschutz (Eingang 1 -> Index 0)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 0:
+                        if not self.latest_inputs[0]:  # Wenn der Motorschutz ausfällt (False)
+                            self.error_signal.emit("Kritisch: Motorschutz ausgelöst!")
                             break
-                    time.sleep(0.05)
+
+                    # 3. Fahr-Check: NUR Endschalter prüfen (Eingang 2 -> Index 1)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        # HIER SCHAUEN WIR STUR NUR AUF INDEX 1!
+                        # Index 2 (Schütz 3) wird absichtlich komplett ignoriert!
+                        if self.latest_inputs[1] == True: 
+                            print("Ziel erreicht: Endschalter (Eingang 2) hat ausgelöst.")
+                            break
+
+                    time.sleep(0.1)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
+
 
                 self.write_hardware_coil(1, False)
                 self.write_hardware_coil(2, False)
@@ -169,21 +199,36 @@ class DriveThread(QThread):
             # ====================================================================
             elif self.mode == "HomeFahrt":
                 self.write_hardware_coil(1, True)
-                time.sleep(0.1)
+                time.sleep(0.5)
                 self.write_hardware_coil(2, True)
 
                 while self._is_running:
                     check_watchdog()
-                    self.check_inputs_during_flight()
+                    
+                    # 1. Eingänge frisch vom Waveshare-Board abfragen
+                    try:
+                        self.latest_inputs = self.communicate_with_backend(self.current_relays)
+                    except Exception as e:
+                        print(f"Modbus-Puffer fängt Waveshare-Fehler ab: {e}")
+                        time.sleep(0.05)
+                        continue
 
-                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
-                        if self.latest_inputs[1] == True:
+                    # 2. Sicherheits-Check: Motorschutz (Eingang 1 -> Index 0)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 0:
+                        if not self.latest_inputs[0]:  # Wenn der Motorschutz ausfällt (False)
+                            self.error_signal.emit("Kritisch: Motorschutz ausgelöst!")
                             break
-                    time.sleep(0.05)
 
-                self.write_hardware_coil(1, False)
-                self.write_hardware_coil(2, False)
-                self.communicate_with_backend([False, False, False, False])
+                    # 3. Fahr-Check: NUR Endschalter prüfen (Eingang 2 -> Index 1)
+                    if isinstance(self.latest_inputs, list) and len(self.latest_inputs) > 1:
+                        # HIER SCHAUEN WIR STUR NUR AUF INDEX 1!
+                        # Index 2 (Schütz 3) wird absichtlich komplett ignoriert!
+                        if self.latest_inputs[1] == True: 
+                            print("Ziel erreicht: Endschalter (Eingang 2) hat ausgelöst.")
+                            break
+
+                        time.sleep(0.05)  # CPU-Entlastung und Timing-Schutz für das Waveshare-Board
+
 
             self.drive_time_signal.emit(time.time() - start_time)
             self.finished_signal.emit()

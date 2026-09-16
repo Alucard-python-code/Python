@@ -14,11 +14,11 @@ DEFAULT_SETTINGS = {
     "Beschuss Langsam" : 2.0,
     "Bremszeit Vorwaerts" : 0.5,
     "Wartezeit Kugelfang" : 0.5,
-    "Wertung Schnell" : 2.5,
+    "Wertung Schnell" : 0.5,
     "Bremszeit Rueckwaerts" : 0.5,
-    # Hinzugefügte Schlüssel für dein Projekt:
     "Watchdog Beschuss": 10.0,
     "Watchdog Wertung": 10.0,
+    "Watchdog HomeFahrt": 10.0,
     "Laufzeit Motor (min)": 0.0,
     "Wartung Intervall (min)": 500.0,
     "Service-PIN": 1234,

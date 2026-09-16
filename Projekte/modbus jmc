@@ -1,0 +1,52 @@
+# Technische Spezifikation: Modularer RP2040 Modbus-TCP I/O- & JMC-Motor-Controller
+**Dokumentation für Schaltplan und Layout (KiCad / EasyEDA)**
+
+---
+
+## 1. Komponenten- und Stückliste (BOM)
+Diese Bauteile bilden die gemeinsame Hardware-Basis für die Hauptplatine (Mainboard).
+
+| Funktionsblock | Empfohlenes Bauteil (IC) | Gehäuseform | Funktion / Schaltungshinweis |
+| :--- | :--- | :--- | :--- |
+| **Haupt-CPU** | `RP2040` (Raspberry Pi) | QFN-56 | Core-Controller; emuliert RMII-Ethernet via PIO-Zustandsautomaten. |
+| **Flash-Speicher** | `W25Q32JVSSIQ` (Winbond) | SOIC-8 | 4 MB (32 Mbit) QSPI-Programmspeicher für den RP2040. |
+| **Netzwerk-Switch** | `KSZ8863RLL` (Microchip) | LQFP-48 | 3-Port Industrie-Ethernet-Switch mit integrierten PHYs (RMII-Modus). |
+| **Spannungsregler** | `MP2451DT` (Monolithic Power) | SOT-23-6 | DC-DC Step-Down. Wandelt 24V/36V Feldspannung in stabile 3,3V Logikspannung. |
+| **Quarzoszillator** | 25.0000 MHz SMD Quarz | 3.2x2.5 mm | Primärtakt für den Switch. Der Switch liefert 50MHz (REF_CLK) an den RP2040. |
+| **32x Digital-In** | 4x `MAX22190ATJ+` | TQFN-32 | 8-Ch Industrie-Eingang-Serializer, via SPI kaskadierbar (Daisy-Chain). |
+| **32x Digital-Out**| 4x `VNI8200XP` | PowerSSO-36 | 8-Ch Industrie High-Side Switch, kurzschlussfest, mit Diagnose-Ausgängen. |
+| **JMC Motor-Puls** | `74ACT14` oder `6N137` (Opto) | SOIC-14 / SO-8 | High-Speed Pegelwandler (3,3V auf 5V/24V) für verzögerungsfreie Signale. |
+
+---
+
+## 2. Terminierungs- und Schutzwiderstände (Reflexionsschutz)
+Diese Widerstände dämpfen die extrem steilen Signalflanken des RP2040 und des Switch-ICs. Sie verhindern Signalreflexionen (Überschwinger), die zu Datenfehlern führen.
+
+| Signal-Bus | Leitungstyp | Wert | Platzierung im Layout | Zweck / Funktion |
+| :--- | :--- | :--- | :--- | :--- |
+| **SPI-Bus (IOs)** | `SPI_SCK` (Takt) | **33 Ω** (0603) | Unmittelbar am RP2040-Ausgangspin | Verhindert Takt-Reflexionen bei der Chip-Kaskade. |
+| **SPI-Bus (IOs)** | `SPI_MOSI` (Daten hin) | **33 Ω** (0603) | Unmittelbar am RP2040-Ausgangspin | Dämpft Überschwinger auf der Master-Datenleitung. |
+| **SPI-Bus (IOs)** | `SPI_CS` (Chip Select) | **33 Ω** (0603) | Unmittelbar am RP2040-Ausgangspin | Stabilisiert die Flanke zur Bauteilauswahl. |
+| **SPI-Bus (IOs)** | `SPI_MISO` (Daten zurück)| **33 Ω** (0603) | Unmittelbar am RP2040-Eingangspin | Absorbiert Reflexionen des letzten Slaves in der Kette. |
+| **RMII (Netzwerk)**| `REF_CLK` (50 MHz Takt) | **22 Ω** (0603) | Unmittelbar am Takt-Ausgang des Switches | Sichert die synchrone Datenübernahme. **Wichtigste Leitung!** |
+| **RMII (Netzwerk)**| `TXD0`, `TXD1`, `TX_EN` | **22 Ω** (0603) | Unmittelbar an den Ausgängen des RP2040 | Dämpft die High-Speed Digitalsignale zum Switch-Chip. |
+| **RMII (Netzwerk)**| `RXD0`, `RXD1`, `CRS_DV` | **22 Ω** (0603) | Unmittelbar an den Ausgängen des Switches| Dämpft die High-Speed Digitalsignale zum RP2040. |
+| **MAX22190 (In)**  | `REFIN` (Referenz) | **18 kΩ (0,1%)**| Unmittelbar am IC-Pin gegen GND | **Zwingend erforderlich!** Kalibriert die 24V-Strombegrenzung. |
+| **MAX22190 (In)**  | Alle 32 Feld-Eingänge | **1 kΩ** (0805) | In Reihe zwischen Klemme und IC-Eingang | Zusätzlicher Stoßstrom-Schutz (Surge/ESD) für Feldleitungen. |
+
+---
+
+## 3. Platinen-Design- und Routing-Regeln
+Verbindliche Layout-Vorgaben für die Leiterplattenfertigung (2- oder 4-Layer-Platine).
+
+| Layout-Bereich | Design-Regel / Parameter | Toleranz | Begründung & Praxistipp |
+| :--- | :--- | :--- | :--- |
+| **Ethernet (MDI)** | Differentielles Impedanz-Matching | **90 Ω** | Leiterbahnbreite/Abstand zwingend mit IPC-Kalkulator auf Layeraufbau berechnen. |
+| **Ethernet (MDI)** | Längen-Matching innerhalb eines Paares| **± 0,5 mm** | `TX+` zu `TX-` sowie `RX+` zu `RX-` exakt paarweise parallel routen. Keine Vias nutzen! |
+| **RMII-Bus** | Längen-Matching aller Busleitungen | **± 2,0 mm** | Alle Daten- und Steuerleitungen des RMII-Busses auf die Gesamtlänge von `REF_CLK` matchen. |
+| **QSPI-Flash** | Längen-Matching zum Takt | **± 3,0 mm** | Flash-IC unmittelbar neben den RP2040 setzen. Bahnen so kurz wie möglich halten. |
+| **VNI8200XP (Out)**| Kühlpad-Potential (Exposed Pad) | **An +24V/+36V!** | **Achtung Kurzschlussgefahr:** Das Pad führt Betriebsspannung, NIEMALS mit Masse (GND) verbinden! |
+| **VNI8200XP (Out)**| Thermische Anbindung | Min. 16 Vias | Winzige Durchkontaktierungen (0,3 mm) direkt im Pad zu einer großen VCC-Kupferfläche setzen. |
+| **36V Leistungsteil**| Leiterbahnbreite der Einspeisung | **Min. 3,0 mm** | Bei 2oz (70 µm) Kupferdicke ausführen. Muss bei 32 aktiven Lasten mehrere Ampere tragen. |
+| **Brückenstecker** | Pin-Vervielfachung für Leistung | 3 bis 4 Pins | Die 24V/36V- und GND-Leitungen auf dem Hutschiene-Brückenstecker auf mehrere Pins aufteilen. |
+| **Entkopplung** | Keramische Stützkondensatoren (100nF)| Abstand < 1,5 mm | Müssen zwingend direkt an den jeweiligen Versorgungs-Pins von RP2040 und Switch-Chip sitzen. |
