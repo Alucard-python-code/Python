@@ -1,0 +1,57 @@
+=========================================================================
+SCHRITT 1: NEUES WARTUNGS-PANEL ANLEGEN
+=========================================================================
+1. Öffnen Sie Ihr funktionierendes Grafana-Dashboard im Webbrowser.
+2. Klicken Sie oben rechts auf das "Panel hinzufügen"-Symbol (Quadrat mit Plus) 
+   und wählen Sie "Add a new panel".
+3. Benennen Sie das Panel im rechten Menü unter "Panel options" -> "Title" um in:
+   Lebensdauer Sensor Schrank 1
+
+=========================================================================
+SCHRITT 2: VISUALISIERUNG ALS FORTSCHRITTSBALKEN WÄHLEN
+=========================================================================
+1. Suchen Sie im rechten Menü unter "Visualizations" nach dem Typ:
+   "Gauge" (Tachometer-Ring) oder "Bar gauge" (Fortschrittsbalken).
+2. Scrollen Sie im rechten Menü nach unten zu "Standard options":
+   - Unit: Wählen Sie "Time" -> "Hours (h)"
+   - Min: Tragen Sie ein: 0
+   - Max: Tragen Sie ein: 17520  (Das entspricht exakt 2 Jahren in Stunden)
+=========================================================================
+SCHRITT 3: DIE MATHEMATISCHE ZEITUHR EINSTELLEN (UNTEN LINKS)
+=========================================================================
+1. Gehen Sie im unteren Bereich des Editors auf den Reiter "Expression" 
+   (oder klicken Sie bei Query auf "+ Expression").
+2. Wählen Sie als Typ (Operation) "Math" aus.
+3. Tragen Sie in das Formelfeld (Expression) exakt diesen Befehl ein:
+   (time() - 1786960459) / 3600
+   
+   *WICHTIG*: Die lange Zahl im Code (1786960459) ist der sogenannte 
+   Unix-Zeitstempel des Einbautages. Wenn Sie den Sensor zuhause einbauen, 
+   holen Sie sich den aktuellen Sekundenwert einfach von Webseiten wie 
+   "unixtime.de" und ersetzen diese Beispielzahl durch Ihren echten Wert!
+
+4. Grafana zieht nun jede Sekunde das Einbaudatum vom aktuellen Tag ab 
+   und teilt es durch 3600, um die echten, unendlichen Betriebsstunden zu 
+   berechnen - völlig ohne Daten aus der InfluxDB zu benötigen!
+=========================================================================
+SCHRITT 4: DIE ALARM-FARBEN FÜR DEN SENSOR VERGEBEN (RECHTES MENÜ)
+=========================================================================
+1. Scrollen Sie im rechten Menü nach unten zum Bereich "Thresholds".
+2. Stellen Sie die Grenzwerte für die 2 Jahre Lebensdauer ein:
+   - Base (0 bis 15.000 Stunden): Wählen Sie ein beruhigendes GRÜN.
+   - Klicken Sie auf "+ Add threshold": Tragen Sie "15000" ein (ca. 1,7 Jahre) 
+     und wählen Sie GELB (Wartung rückt näher).
+   - Klicken Sie erneut auf "+ Add threshold": Tragen Sie "17520" ein (Genau 2 Jahre) 
+     und wählen Sie ein leuchtendes ROT (Sensor jetzt tauschen!).
+
+=========================================================================
+SCHRITT 5: DEN AUTOMATISCHEN WARTUNGS-ALARM AKTIVIEREN
+=========================================================================
+1. Klicken Sie im Panel-Editor oben auf den Reiter "Alert" und danach 
+   auf "Create alert rule from this panel".
+2. Tragen Sie als Namen ein: Wartung_Sensor_Schrank_1
+3. Stellen Sie die Bedingung im mathematischen Bereich (Expression) ein auf:
+   IS ABOVE -> 17520
+4. Wählen Sie ganz unten unter "Notifications" bei "Contact point" wieder Ihren 
+   erstellten Kontakt: Private_Handy_Alarmierung
+5. Klicken Sie oben rechts auf den blauen Button "Save rule and exit".
