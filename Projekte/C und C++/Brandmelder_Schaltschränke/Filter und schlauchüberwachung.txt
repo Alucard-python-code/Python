@@ -1,0 +1,72 @@
+=========================================================================
+SCHRITT 1: LÜFTER-PANEL IM DASHBOARD ANLEGEN
+=========================================================================
+1. Öffnen Sie Ihr Grafana-Dashboard im Webbrowser.
+2. Klicken Sie oben rechts auf das "Panel hinzufügen"-Symbol (Quadrat mit Plus) 
+   und wählen Sie "Add a new panel".
+3. Benennen Sie das Panel im rechten Menü unter "Panel options" -> "Title" um in:
+   Lüfter- & Schlauchstatus Schrank 1
+
+=========================================================================
+SCHRITT 2: DIE VISUALISIERUNG RECHTS EINSTELLEN
+=========================================================================
+1. Suchen Sie im rechten Menü unter "Visualizations" nach dem Typ: "Gauge".
+2. Scrollen Sie im rechten Menü nach unten zu "Standard options":
+   - Unit: Wählen Sie "None" und schreiben Sie bei "Custom unit": RPM
+   - Min: Tragen Sie ein: 3000
+   - Max: Tragen Sie ein: 6000
+
+=========================================================================
+SCHRITT 3: DIE LIVE-DREHZAHL ABFRAGEN (UNTEN LINKS)
+=========================================================================
+1. Wählen Sie als Data Source Ihre verknüpfte "InfluxDB" (bmz) aus.
+2. Stellen Sie die Datenabfrage in Zeile "A" per Klick-Menü so ein:
+   - FROM: mqtt_consumer
+   - WHERE: ip = 192.168.178.101 (Die IP des zu überwachenden Schrankes)
+   - SELECT: field(rpm)
+=========================================================================
+SCHRITT 4: GRAFANA-AMPEL FÜR STRÖMUNGSWIDERSTAND EINRICHTEN
+=========================================================================
+1. Scrollen Sie im rechten Menü nach unten zum Bereich "Thresholds" (Schwellenwerte).
+2. Wir bauen eine "Mittelbereichs-Ampel", damit der Normalwert im grünen Bereich liegt:
+   
+   - Base (Alles unter 4500 RPM): Wählen Sie ein leuchtendes ROT.
+     (Bedeutet: Schlauch wurde angefressen, durchgebissen oder ist abgerissen)
+     
+   - Klicken Sie auf "+ Add threshold": Tragen Sie "4500" ein.
+     Wählen Sie für diesen Bereich ein gesundes GRÜN (Normalbetrieb).
+     
+   - Klicken Sie erneut auf "+ Add threshold": Tragen Sie "5200" ein.
+     Wählen Sie für diesen oberen Bereich wieder ROT.
+     (Bedeutet: Filter zugesetzt oder Schlauch komplett verstopft/abgeknickt)
+
+3. Klicken Sie oben rechts auf den blauen Button "Apply". Das Panel steht optisch!
+=========================================================================
+SCHRITT 5: ALARM 1 EINRICHTEN - SCHLAUCH ANGEFRESSEN / ABGERISSEN
+=========================================================================
+1. Klicken Sie im Panel-Editor oben auf den Reiter "Alert" und danach 
+   auf "Create alert rule from this panel".
+2. Tragen Sie als Namen der Alarmregel ein: Schlauchbruch_Schrank_1
+3. Stellen Sie die Bedingung im mathematischen Bereich (Expression) ein auf:
+   IS BELOW -> 4500
+4. Setzen Sie das Zeitfenster bei "For" auf: 1m (Der Fehler muss 1 Minute lang 
+   anliegen, um kurze Schwankungen beim Öffnen der Schranktür auszufiltern).
+5. Schreiben Sie in das Textfeld "Summary" (Beschreibung) ganz unten rein:
+   🚨 STRÖMUNGSABRISS! Die Lüfterdrehzahl ist kritisch gesunken. Der Ansaugschlauch 
+   zu Schrank 1 ist vermutlich beschädigt, angefressen oder von der Box gerutscht! 
+   Das System zieht Falschluft und ist an diesem Schrank blind!
+6. Wählen Sie unter "Contact point" Ihre "Private_Handy_Alarmierung" und klicken Sie auf "Save".
+
+=========================================================================
+SCHRITT 6: ALARM 2 EINRICHTEN - FILTEVLIER ZUGESETZT / SCHLAUCH VERSTOPFT
+=========================================================================
+1. Erstellen Sie eine zweite Alarmregel aus demselben Drehzahl-Panel.
+2. Tragen Sie als Namen der Alarmregel ein: Leitung_blockiert_Schrank_1
+3. Stellen Sie die Bedingung im mathematischen Bereich ein auf:
+   IS ABOVE -> 5200
+4. Setzen Sie das Zeitfenster bei "For" wieder auf: 1m
+5. Schreiben Sie in das Textfeld "Summary" (Beschreibung) ganz unten rein:
+   🔧 WARTUNG FÄLLIG! Die Lüfterdrehzahl ist stark angestiegen, da der Lüfter im 
+   Vakuum dreht. Entweder ist das integrierte Staubfiltervlies vollständig zugesetzt 
+   oder der 6mm-Ansaugschlauch ist blockiert, verstopft oder abgeknickt!
+6. Wählen Sie Ihren Contact Point und klicken Sie oben rechts auf "Save rule and exit".
