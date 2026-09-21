@@ -1,28 +1,27 @@
 function Encoder(device, measurements) {
     
-    // 1. Standard-Werte definieren (Falls nichts gefunden wird)
+    // 1. Fallback-Werte (Falls kein Feld zugeordnet werden kann)
     var targetTopic = "dtck-cmd/v1/dein-produkt/" + device.serial_number + "/DIGITAL_OUT_1";
     var payloadValue = "0";
     
-    // 2. Dynamisch nachschauen, welches Feld die Aktion ausgelöst hat
-    // measurements enthält z.B. { DIGITAL_OUT_1: { value: true } }
+    // 2. Das measurements-Objekt durchlaufen, um das geänderte Widget zu finden
     for (var fieldName in measurements) {
         if (measurements.hasOwnProperty(fieldName)) {
             
-            // Topic passend für den Pico-Callback zusammensetzen
-            targetTopic = "dtck-cmd/v1/dein-produkt/" + device.serial_number + "/" + fieldName;
+            // Baut exakt den Pfad, auf den der Pico in "mqttCallback" lauscht
+            targetTopic = "dtck-cmd/v1/dein-produkt/" + device.serial_number + "_" + fieldName;
             
-            // True/False in "1"/"0" für das Relais übersetzen
+            // True/False Zustand des Dashboard-Switches in "1" oder "0" übersetzen
             if (measurements[fieldName].value === true) {
                 payloadValue = "1";
             } else {
                 payloadValue = "0";
             }
-            break; // Schleife abbrechen, da wir das geänderte Feld gefunden haben
+            break; // Schleife nach dem Treffer sofort beenden
         }
     }
     
-    // 3. Datacake erwartet zwingend dieses Rückgabe-Objekt
+    // 3. Rückgabe an den Datacake-MQTT-Broker
     return {
         topic: targetTopic,
         payload: payloadValue
