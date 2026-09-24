@@ -1,0 +1,129 @@
+
+    ;; 8x Multiplexer fuer die 32 Servokanaele (Je Baustein = 4 vollwertige Kanaele)
+    (comp (ref U3) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020003))
+    (comp (ref U4) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020004))
+    (comp (ref U5) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020005))
+    (comp (ref U6) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020006))
+    (comp (ref U7) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020007))
+    (comp (ref U8) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020008))
+    (comp (ref U9) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020009))
+    (comp (ref U10) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020010))
+
+    ;; 2x Multiplexer fuer die 6 S.BUS-Ausgaenge
+    (comp (ref U11) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020011))
+    (comp (ref U12) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020012))
+    ;; Physische 3-Pin Ausgangs-Stiftleisten zu den Rudern (Masse, Plus, Signal)
+    (comp (ref J1) (value "Servo_1") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030001))
+    (comp (ref J2) (value "Servo_2") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030002))
+    (comp (ref J3) (value "Servo_3") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030003))
+    (comp (ref J4) (value "Servo_4") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030004))
+    (comp (ref J5) (value "Servo_5") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030005))
+    (comp (ref J6) (value "Servo_6") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030006))
+    (comp (ref J7) (value "Servo_7") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030007))
+    (comp (ref J8) (value "Servo_8") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030008))
+    (comp (ref J9) (value "Servo_9") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030009))
+    (comp (ref J10) (value "Servo_10") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030010))
+    (comp (ref J11) (value "Servo_11") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030011))
+    (comp (ref J12) (value "Servo_12") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030012))
+    (comp (ref J13) (value "Servo_13") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030013))
+    (comp (ref J14) (value "Servo_14") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030014))
+    (comp (ref J15) (value "Servo_15") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030015))
+    (comp (ref J16) (value "Servo_16") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030016))
+    (comp (ref J17) (value "Servo_17") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030017))
+    (comp (ref J18) (value "Servo_18") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030018))
+    (comp (ref J19) (value "Servo_19") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030019))
+    (comp (ref J20) (value "Servo_20") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030020))
+    (comp (ref J21) (value "Servo_21") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030021))
+    (comp (ref J22) (value "Servo_22") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030022))
+    (comp (ref J23) (value "Servo_23") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030023))
+    (comp (ref J24) (value "Servo_24") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030024))
+    (comp (ref J25) (value "Servo_25") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030025))
+    (comp (ref J26) (value "Servo_26") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030026))
+    (comp (ref J27) (value "Servo_27") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030027))
+    (comp (ref J28) (value "Servo_28") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030028))
+    (comp (ref J29) (value "Servo_29") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030029))
+    (comp (ref J30) (value "Servo_30") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030030))
+    (comp (ref J31) (value "Servo_31") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030031))
+    (comp (ref J32) (value "Servo_32") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F030032))
+
+    ;; Die 6 S.BUS-Hauptausgangsstecker
+    (comp (ref J33) (value "SBUS_Out_1") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040001))
+    (comp (ref J34) (value "SBUS_Out_2") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040002))
+    (comp (ref J35) (value "SBUS_Out_3") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040003))
+    (comp (ref J36) (value "SBUS_Out_4") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040004))
+    (comp (ref J37) (value "SBUS_Out_5") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040005))
+    (comp (ref J38) (value "SBUS_Out_6") (footprint "Connector_PinHeader_2.54mm:PinHeader_1x03_P2.54mm_Vertical") (tstamp 5F040006)))
+  (nets
+    ;; Globales System-GND & Rolle-Strapping
+    (net (code 1) (name "GND")
+      (node (ref U1) (pin 57)) (node (ref U2) (pin 57))
+      (node (ref U3) (pin 8))  (node (ref U4) (pin 8))  (node (ref U5) (pin 8))  (node (ref U6) (pin 8))
+      (node (ref U7) (pin 8))  (node (ref U8) (pin 8))  (node (ref U9) (pin 8))  (node (ref U10) (pin 8))
+      (node (ref U11) (pin 8)) (node (ref U12) (pin 8))
+      (node (ref J1) (pin 1))  (node (ref J2) (pin 1))  (node (ref J3) (pin 1))  (node (ref J32) (pin 1))
+      (node (ref U1) (pin 22))) ;; Hardware Strapping: PIN 22 an Master liegt fest auf Masse
+
+    (net (code 2) (name "VCC_SERVO")
+      (node (ref J1) (pin 2))  (node (ref J2) (pin 2))  (node (ref J3) (pin 2))  (node (ref J32) (pin 2))
+      (node (ref J33) (pin 2)) (node (ref J38) (pin 2)))
+
+    ;; Unbestechliche Hardware-Watchdog-Weiche (Select & Enable Leitungen parallel)
+    (net (code 3) (name "WATCHDOG_SELECT")
+      (node (ref U1) (pin 50)) ;; GPIO 47 an Master erzeugt das Frequenzsignal
+      (node (ref U3) (pin 1))  (node (ref U4) (pin 1))  (node (ref U5) (pin 1))  (node (ref U6) (pin 1))
+      (node (ref U7) (pin 1))  (node (ref U8) (pin 1))  (node (ref U9) (pin 1))  (node (ref U10) (pin 1))
+      (node (ref U11) (pin 1)) (node (ref U12) (pin 1))
+      (node (ref U3) (pin 15)) (node (ref U4) (pin 15)) (node (ref U5) (pin 15)) (node (ref U6) (15))
+      (node (ref U7) (pin 15)) (node (ref U8) (pin 15)) (node (ref U9) (pin 15)) (node (ref U10) (pin 15))
+      (node (ref U11) (pin 15)) (node (ref U12) (pin 15)))
+
+    ;; Kreuzkopplung & Kerosinsensor
+    (net (code 4) (name "RS485_INTERN_A")
+      (node (ref U1) (pin 12))   ;; UART1 Tx Master
+      (node (ref U2) (pin 13)))  ;; UART1 Rx Backup
+    (net (code 5) (name "RS485_INTERN_B")
+      (node (ref U1) (pin 13))   ;; UART1 Rx Master
+      (node (ref U2) (pin 12)))  ;; UART1 Tx Backup
+
+    (net (code 6) (name "FLOW_SENSOR_SIGNAL")
+      (node (ref U1) (pin 49))   ;; GPIO 46 Master
+      (node (ref U2) (pin 49)))  ;; GPIO 46 Backup (Hot-Standby)
+    ;; --- BLOCK U3: Servos 1 bis 4 ---
+    (net (code 7) (name "M_PWM_0") (node (ref U1) (pin 2)) (node (ref U3) (pin 2)))
+    (net (code 8) (name "B_PWM_0") (node (ref U2) (pin 2)) (node (ref U3) (pin 3)))
+    (net (code 9) (name "OUT_PWM_0") (node (ref U3) (pin 4)) (node (ref J1) (pin 3)))
+
+    (net (code 10) (name "M_PWM_1") (node (ref U1) (pin 3)) (node (ref U3) (pin 5)))
+    (net (code 11) (name "B_PWM_1") (node (ref U2) (pin 3)) (node (ref U3) (pin 6)))
+    (net (code 12) (name "OUT_PWM_1") (node (ref U3) (pin 7)) (node (ref J2) (pin 3)))
+
+    (net (code 13) (name "M_PWM_2") (node (ref U1) (pin 4)) (node (ref U3) (pin 11)))
+    (net (code 14) (name "B_PWM_2") (node (ref U2) (pin 4)) (node (ref U3) (pin 10)))
+    (net (code 15) (name "OUT_PWM_2") (node (ref U3) (pin 9)) (node (ref J3) (pin 3)))
+
+    (net (code 16) (name "M_PWM_3") (node (ref U1) (pin 5)) (node (ref U3) (pin 14)))
+    (net (code 17) (name "B_PWM_3") (node (ref U2) (pin 5)) (node (ref U3) (pin 13)))
+    (net (code 18) (name "OUT_PWM_3") (node (ref U3) (pin 12)) (node (ref J4) (pin 3)))
+
+    ;; --- BLOCK U4: Servos 5 bis 8 ---
+    (net (code 19) (name "M_PWM_4") (node (ref U1) (pin 6)) (node (ref U4) (pin 2)))
+    (net (code 20) (name "B_PWM_4") (node (ref U2) (pin 6)) (node (ref U4) (pin 3)))
+    (net (code 21) (name "OUT_PWM_4") (node (ref U4) (pin 4)) (node (ref J5) (pin 3)))
+
+    (net (code 22) (name "M_PWM_5") (node (ref U1) (pin 7)) (node (ref U4) (pin 5)))
+    (net (code 23) (name "B_PWM_5") (node (ref U2) (pin 7)) (node (ref U4) (pin 6)))
+    (net (code 24) (name "OUT_PWM_5") (node (ref U4) (pin 7)) (node (ref J6) (pin 3)))
+
+    ;; --- DYNAMISCHER END-STRANG (Servo 32 & S.BUS) ---
+    (net (code 25) (name "M_PWM_31") (node (ref U1) (pin 35)) (node (ref U10) (pin 14)))
+    (net (code 26) (name "B_PWM_31") (node (ref U2) (pin 35)) (node (ref U10) (pin 13)))
+    (net (code 27) (name "OUT_PWM_31") (node (ref U10) (pin 12)) (node (ref J32) (pin 3)))
+
+    (net (code 28) (name "M_SBUS_0") (node (ref U1) (pin 36)) (node (ref U11) (pin 2)))
+    (net (code 29) (name "B_SBUS_0") (node (ref U2) (pin 36)) (node (ref U11) (pin 3)))
+    (net (code 30) (name "OUT_SBUS_1") (node (ref U11) (pin 4)) (node (ref J33) (pin 3)))
+
+    (net (code 31) (name "M_SBUS_5") (node (ref U1) (pin 41)) (node (ref U12) (pin 14)))
+    (net (code 32) (name "B_SBUS_5") (node (ref U2) (pin 41)) (node (ref U12) (pin 13)))
+    (net (code 33) (name "OUT_SBUS_6") (node (ref U12) (pin 12)) (node (ref J38) (pin 3)))
+))
