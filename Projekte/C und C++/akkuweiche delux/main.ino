@@ -12,7 +12,7 @@
 #define I2C_INTERNAL   i2c0   // Lokale Sensoren (IMU 1 bzw. IMU 2)
 #define I2C_EXTERNAL   i2c1   // Externe Kabelsensoren (Pitot / LIDAR)
 
-#define PIN_ROLE_SELECT 22    // GND = Chip 1, OPEN = Chip 2
+#define PIN_ROLE_SELECT 21    // GND = Chip 1, OPEN = Chip 2
 #define PIN_WATCHDOG    47    // 1-kHz Toggle für Hardware-Weiche
 #define PIN_FLOW_SENSOR 46    // Impuls-Eingang Kerosinzähler
 

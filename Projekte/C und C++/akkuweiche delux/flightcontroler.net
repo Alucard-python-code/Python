@@ -1,4 +1,5 @@
-
+(export (version D)
+  (components
     ;; 8x Multiplexer fuer die 32 Servokanaele (Je Baustein = 4 vollwertige Kanaele)
     (comp (ref U3) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020003))
     (comp (ref U4) (value "74CBTLV3257") (footprint "Package_SO:TSSOP-16_4.4x5mm_P0.65mm") (tstamp 5F020004))
