@@ -10,33 +10,38 @@ extern uint16_t entleerenZeitSek;
 extern uint16_t leckageZeitMs;
 extern Modell modelle[];
 
+extern uint16_t irKerosinLimit; // Globale Variable für den Schwellenwert
+
 inline void saveCalibrationToSD() {
-    File file = SD.open("calib.tmp", FILE_WRITE);
-    if (file) {
-        file.print(impulseProLiter); file.print(",");
-        file.print(druckNullpunktSpannung, 4); file.print(",");
-        file.print(entleerenZeitSek); file.print(",");
-        file.println(leckageZeitMs);
-        file.close();
-        SD.remove("calib.txt");
-        File src = SD.open("calib.tmp");
-        File dst = SD.open("calib.txt", FILE_WRITE);
-        if(src && dst) { while(src.available()) { dst.write(src.read()); } }
-        if(src) src.close(); if(dst) dst.close();
-        SD.remove("calib.tmp");
-    }
+  File file = SD.open("calib.tmp", FILE_WRITE);
+  if (file) {
+    file.print(impulseProLiter); file.print(",");
+    file.print(druckNullpunktSpannung, 4); file.print(",");
+    file.print(entleerenZeitSek); file.print(",");
+    file.print(leckageZeitMs); file.print(",");
+    file.println(irKerosinLimit); // NEU: IR-Schwellenwert mitspeichern
+    file.close();
+    SD.remove("calib.txt");
+    File src = SD.open("calib.tmp");
+    File dst = SD.open("calib.txt", FILE_WRITE);
+    if(src && dst) { while(src.available()) { dst.write(src.read()); } }
+    if(src) src.close(); if(dst) dst.close();
+    SD.remove("calib.tmp");
+  }
 }
 
 inline void loadCalibrationFromSD() {
-    File file = SD.open("calib.txt");
-    if (file) {
-        impulseProLiter = file.parseInt();
-        druckNullpunktSpannung = file.parseFloat();
-        if (file.available()) entleerenZeitSek = file.parseInt();
-        if (file.available()) leckageZeitMs = file.parseInt();
-        file.close();
-    }
+  File file = SD.open("calib.txt");
+  if (file) {
+    impulseProLiter = file.parseInt();
+    druckNullpunktSpannung = file.parseFloat();
+    if (file.available()) entleerenZeitSek = file.parseInt();
+    if (file.available()) leckageZeitMs = file.parseInt();
+    if (file.available()) irKerosinLimit = file.parseInt(); // NEU: IR-Schwellenwert laden
+    file.close();
+  }
 }
+
 
 inline void savePinToSD() {
     File file = SD.open("pin.tmp", FILE_WRITE);

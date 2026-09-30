@@ -4,8 +4,6 @@
 // =========================================================================
 // MODULINO I2C-ADRESSEN
 // =========================================================================
-#define ADRESSE_RELAIS_TANKEN   0x20  
-#define ADRESSE_RELAIS_LEEREN   0x21  
 #define ADRESSE_ENCODER_KNOB    0x30  
 
 // =========================================================================
@@ -19,6 +17,7 @@
 
 #define PIN_DRUCK_SENSOR A0
 #define PIN_AKKU_SENSOR  A1  // NEU: Analoger Eingang für den 1:5 LiPo-Spannungsteiler
+#define PIN_BUBBLE_SENSOR A2 // Analoger Eingang für den IR-Fototransistor (mit 10k Pull-Down)
 #define PIN_FLOW_SENSOR  2   
 
 #define PIN_H_BRUECKE_ENA 11  
@@ -45,8 +44,10 @@ struct Benutzer {
 };
 
 enum MenuState {
-    SPLASH, HAUPTMENU, AUTOMATIK_SELECT, AUTOMATIK_RUN, MANUELL, 
-    PIN_PRUEFUNG, EINSTELLUNGEN, KALIBRIERUNG_FLOW, KALIBRIERUNG_DRUCK, 
-    PIN_AENDERN, BENUTZER_EDIT, MODELLSPEICHER, TASTATUR_INPUT,
-    SETTINGS_TIMER
+  SPLASH, HAUPTMENU, AUTOMATIK_SELECT, AUTOMATIK_RUN, MANUELL, 
+  PIN_PRUEFUNG, EINSTELLUNGEN, KALIBRIERUNG_FLOW, KALIBRIERUNG_DRUCK, 
+  KALIBRIERUNG_BUBBLE, // NEU: Zustand für die IR-Glasröhren-Kalibrierung
+  PIN_AENDERN, BENUTZER_EDIT, MODELLSPEICHER, TASTATUR_INPUT,
+  SETTINGS_TIMER
 };
+
