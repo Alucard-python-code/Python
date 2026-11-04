@@ -13,8 +13,6 @@
 #include "SD_Storage.h"
 
 extern Adafruit_ILI9341 tft;
-extern ModulinoRelay relaisTanken;
-extern ModulinoRelay relaisLeeren;
 extern ModulinoKnob encoderModulino;
 
 extern MenuState currentState;
@@ -41,69 +39,72 @@ extern unsigned long lastFlowCalcTime;
 inline void flowSensorISR() { flowImpulse++; }
 
 inline void checkGlobalAbbruch() {
-    if (encoderModulino.isPressed()) {
-        unsigned long pressTime = millis();
-        while (encoderModulino.isPressed()) {
-            WDT.refresh(); 
-            if (millis() - pressTime > 1500) {
-                setMotor(0, true);
-                currentState = HAUPTMENU;
-                encoderModulino.set(0);
-                tft.fillScreen(ILI9341_BLACK);
-                delay(500);
-                break;
-            }
-        }
+  if (encoderModulino.isPressed()) {
+    unsigned long pressTime = millis();
+    while (encoderModulino.isPressed()) {
+      WDT.refresh(); 
+      if (millis() - pressTime > 1500) {
+        setMotor(0, true);
+        currentState = HAUPTMENU;
+        encoderModulino.set(0);
+        tft.fillScreen(ILI9341_BLACK);
+        delay(500);
+        break;
+      }
     }
+  }
 }
-extern void loadTotalFuelFromSD(); // Referenz deklarieren
+
+extern void loadTotalFuelFromSD(); 
+
 inline void runSetup() {
-    Modulino.begin();
-    relaisTanken.begin();
-    relaisLeeren.begin();
-    encoderModulino.begin();
-    setMotor(0, true);
+  Modulino.begin();
+  encoderModulino.begin();
+  
+  pinMode(PIN_DISPLAY_CS, OUTPUT);
+  pinMode(PIN_DISPLAY_DC, OUTPUT);
+  pinMode(PIN_DISPLAY_RST, OUTPUT);
+  pinMode(PIN_DRUCK_SENSOR, INPUT);
+  pinMode(PIN_AKKU_SENSOR, INPUT);
+  pinMode(PIN_BUBBLE_SENSOR, INPUT); // IR-Sensor als Eingang
+  pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
+  pinMode(PIN_H_BRUECKE_ENA, OUTPUT);
+  pinMode(PIN_H_BRUECKE_IN1, OUTPUT);
+  pinMode(PIN_H_BRUECKE_IN2, OUTPUT);
 
-    pinMode(PIN_DISPLAY_CS, OUTPUT);
-    pinMode(PIN_DISPLAY_DC, OUTPUT);
-    pinMode(PIN_DISPLAY_RST, OUTPUT);
-    pinMode(PIN_DRUCK_SENSOR, INPUT);
-    pinMode(PIN_FLOW_SENSOR, INPUT_PULLUP);
-    pinMode(PIN_H_BRUECKE_ENA, OUTPUT);
-    pinMode(PIN_H_BRUECKE_IN1, OUTPUT);
-    pinMode(PIN_H_BRUECKE_IN2, OUTPUT);
+  setMotor(0, true); // Stellt sicher, dass die Pumpe beim Start steht
 
-    attachInterrupt(digitalPinToInterrupt(PIN_FLOW_SENSOR), flowSensorISR, RISING);
+  attachInterrupt(digitalPinToInterrupt(PIN_FLOW_SENSOR), flowSensorISR, RISING);
 
-    tft.begin();
-    tft.setRotation(1);
+  tft.begin();
+  tft.setRotation(1);
 
-    if (!SD.begin(PIN_SD_CS)) {
-        tft.fillScreen(ILI9341_RED);
-        tft.setCursor(20, 100); tft.setTextSize(2);
-        tft.print("SD-Karte fehlt/defekt!");
-        delay(4000);
-    } else {
-        loadCalibrationFromSD();
-        loadPinFromSD();
-        loadModelleFromSD();
-        loadTotalFuelFromSD(); // <-- NEU: Lädt die Lebenszeit-Liter beim Start
+  if (!SD.begin(PIN_SD_CS)) {
+    tft.fillScreen(ILI9341_RED);
+    tft.setCursor(20, 100); tft.setTextSize(2);
+    tft.print("SD-Karte fehlt/defekt!");
+    delay(4000);
+  } else {
+    loadCalibrationFromSD();
+    loadPinFromSD();
+    loadModelleFromSD();
+    loadTotalFuelFromSD(); 
+  }
+
+  if (modelle[0].tankvolumenMl <= 0) {
+    for(int i=0; i<10; i++) {
+      sprintf(modelle[i].name, "Modell %d", i+1);
+      modelle[i].tankvolumenMl = 1000 + (i * 500);
+      modelle[i].maxDruckMbar = 120 + (i * 10);
+      modelle[i].istBeutel = (i % 2 == 0);
     }
-    
-    if (modelle[0].tankvolumenMl <= 0) {
-        for(int i=0; i<10; i++) {
-            sprintf(modelle[i].name, "Modell %d", i+1);
-            modelle[i].tankvolumenMl = 1000 + (i * 500);
-            modelle[i].maxDruckMbar = 120 + (i * 10);
-            modelle[i].istBeutel = (i % 2 == 0);
-        }
-        saveModelleToSD();
-    }
+    saveModelleToSD();
+  }
 
-    strcpy(user.vorname, "Max"); 
-    strcpy(user.nachname, "Mustermann");
+  strcpy(user.vorname, "Max"); 
+  strcpy(user.nachname, "Mustermann");
 
-    currentState = SPLASH;
-    stateTimer = millis();
-    WDT.begin(2000); 
+  currentState = SPLASH;
+  stateTimer = millis();
+  WDT.begin(2000); 
 }

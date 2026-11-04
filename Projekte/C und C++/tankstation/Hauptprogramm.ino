@@ -18,8 +18,6 @@
 #include "Mode_Modellspeicher.h"
 
 Adafruit_ILI9341 tft = Adafruit_ILI9341(PIN_DISPLAY_CS, PIN_DISPLAY_DC, PIN_DISPLAY_RST);
-ModulinoRelay relaisTanken(ADRESSE_RELAIS_TANKEN);    
-ModulinoRelay relaisLeeren(ADRESSE_RELAIS_LEEREN);
 ModulinoKnob encoderModulino(ADRESSE_ENCODER_KNOB); 
 
 MenuState currentState;
@@ -27,6 +25,7 @@ MenuState nextStateAfterKeyboard;
 unsigned long stateTimer = 0;
 unsigned long leckageTimer = 0; 
 
+uint16_t irKerosinLimit = 700; // Sicherer Standard-Schwellenwert vor Erstkalibrierung
 uint16_t impulseProLiter = 200;
 float druckNullpunktSpannung = 0.5; 
 char systemPin[5] = "0000";
@@ -125,27 +124,28 @@ void loop() {
         case PIN_PRUEFUNG: currentState = EINSTELLUNGEN; encoderModulino.set(0); break;
 
         case EINSTELLUNGEN: {
-            int sel = abs(encoderModulino.get()) % 5;
-            static int lastSel = -1;
-            if (sel != lastSel) {
-                drawHeader("EINSTELLUNGEN");
-                const char* opts[] = {"1. Durchfluss-Kalibr.", "2. Druck-Nullung", "3. System-PIN aendern", "4. Benutzerdaten", "5. Timer & Leckage"};
-                for (int i = 0; i < 5; i++) {
-                    if (i == sel) { tft.fillRect(15, 42 + (i * 33), 290, 26, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); } 
-                    else { tft.setTextColor(ILI9341_WHITE); }
-                    tft.setCursor(25, 47 + (i * 33)); tft.setTextSize(2); tft.print(opts[i]);
-                }
-                lastSel = sel;
+        int sel = abs(encoderModulino.get()) % 6; // Erhöht auf 6 Einträge
+        static int lastSel = -1;
+        if (sel != lastSel) {
+            drawHeader("EINSTELLUNGEN");
+            const char* opts[] = {"1. Durchfluss-Kalibr.", "2. Druck-Nullung", "3. Blasen-Sensor Kal.", "4. System-PIN aendern", "5. Benutzerdaten", "6. Timer & Leckage"};
+            for (int i = 0; i < 6; i++) {
+            if (i == sel) { tft.fillRect(15, 36 + (i * 29), 290, 25, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK); } 
+            else { tft.setTextColor(ILI9341_WHITE); }
+            tft.setCursor(25, 41 + (i * 29)); tft.setTextSize(2); tft.print(opts[i]);
             }
-            if (click) {
-                lastSel = -1; encoderModulino.set(0);
-                if (sel == 0) currentState = KALIBRIERUNG_FLOW;
-                if (sel == 1) currentState = KALIBRIERUNG_DRUCK;
-                if (sel == 2) currentState = HAUPTMENU; 
-                if (sel == 3) currentState = BENUTZER_EDIT;
-                if (sel == 4) currentState = SETTINGS_TIMER; 
-            }
-            break;
+            lastSel = sel;
+        }
+        if (click) {
+            lastSel = -1; encoderModulino.set(0);
+            if (sel == 0) currentState = KALIBRIERUNG_FLOW;
+            if (sel == 1) currentState = KALIBRIERUNG_DRUCK;
+            if (sel == 2) currentState = KALIBRIERUNG_BUBBLE; // NEU: Sprung in die IR-Kalibrierung
+            if (sel == 3) currentState = HAUPTMENU; // Zurück (hier mappt dein Code auf Hauptmenü)
+            if (sel == 4) currentState = BENUTZER_EDIT;
+            if (sel == 5) currentState = SETTINGS_TIMER; 
+        }
+        break;
         }
 
         case SETTINGS_TIMER: handleSettingsTimer(click); break;
@@ -161,6 +161,62 @@ void loop() {
                 encoderModulino.set(0);
             }
             break;
+        case KALIBRIERUNG_BUBBLE: {
+        static int messwertLuft = 0;
+        static int schritt = 0; // 0 = Luft messen, 1 = Kerosin messen
+        static unsigned long lastValueUpdate = 0;
+        
+        if (schritt == 0) {
+            if (millis() - lastValueUpdate > 200) {
+            drawHeader("IR-KAL: SCHLAUCH LEER");
+            tft.setTextSize(2); tft.setTextColor(ILI9341_WHITE);
+            tft.setCursor(20, 55); tft.print("Glasrohr muss trocken");
+            tft.setCursor(20, 80); tft.print("bzw. voll Luft sein!");
+            tft.setCursor(20, 125); tft.print("Live-Wert: "); tft.print(analogRead(PIN_BUBBLE_SENSOR));
+            tft.fillRect(15, 175, 290, 30, ILI9341_BLUE); tft.setTextColor(ILI9341_WHITE);
+            tft.setCursor(40, 182); tft.print("Klicken zum Messen");
+            lastValueUpdate = millis();
+            }
+            if (click) {
+            messwertLuft = analogRead(PIN_BUBBLE_SENSOR);
+            schritt = 1;
+            delay(300);
+            tft.fillScreen(ILI9341_BLACK);
+            lastValueUpdate = 0;
+            }
+        } 
+        else if (schritt == 1) {
+            if (millis() - lastValueUpdate > 200) {
+            drawHeader("IR-KAL: VOLL KEROSIN");
+            tft.setTextSize(2); tft.setTextColor(ILI9341_WHITE);
+            tft.setCursor(20, 55); tft.print("Glasrohr mit reinem");
+            tft.setCursor(20, 80); tft.print("Kerosin+Oel fuellen!");
+            tft.setCursor(20, 125); tft.print("Live-Wert: "); tft.print(analogRead(PIN_BUBBLE_SENSOR));
+            tft.fillRect(15, 175, 290, 30, ILI9341_GREEN); tft.setTextColor(ILI9341_BLACK);
+            tft.setCursor(30, 182); tft.print("Speichern & Beenden");
+            lastValueUpdate = millis();
+            }
+            if (click) {
+            int messwertKerosin = analogRead(PIN_BUBBLE_SENSOR);
+            // Berechne die goldene Mitte als Schwellenwert
+            irKerosinLimit = messwertLuft + ((messwertKerosin - messwertLuft) / 2);
+            
+            saveCalibrationToSD(); // Permanent sichern
+            
+            tft.fillScreen(ILI9341_BLACK);
+            tft.setTextColor(ILI9341_GREEN); tft.setTextSize(2);
+            tft.setCursor(20, 90); tft.print("Kalibrierung Erfolg!");
+            tft.setCursor(20, 130); tft.print("Limit gesetzt: "); tft.print(irKerosinLimit);
+            delay(2500);
+            
+            schritt = 0;
+            currentState = HAUPTMENU;
+            encoderModulino.set(0);
+            lastValueUpdate = 0;
+            }
+        }
+        break;
+        }
 
         case MODELLSPEICHER: handleModellspeicherMenu(click); break;
         case TASTATUR_INPUT: handleTastaturInput(click); break;
