@@ -8,8 +8,15 @@ class CustomerScreen(QWidget):
 
         layout.addWidget(QLabel("<h2>Kundenverwaltung & Dashboard</h2>"))
         
+        # NEU: Live-Suchfeld für Kunden
+        search_layout = QHBoxLayout()
+        search_layout.addWidget(QLabel("🔍 Schnellsuche:"))
+        self.txt_search = QLineEdit(placeholderText="Firma, Name oder E-Mail eingeben...")
+        self.txt_search.textChanged.connect(self.filter_customers)
+        search_layout.addWidget(self.txt_search)
+        layout.addLayout(search_layout)
+        
         self.customer_list = QListWidget()
-        layout.addWidget(QLabel("Vorhandene Kunden auswählen:"))
         layout.addWidget(self.customer_list)
         
         btn_layout_top = QHBoxLayout()
@@ -40,18 +47,26 @@ class CustomerScreen(QWidget):
 
     def refresh_customers(self):
         self.customer_list.clear()
-        for cust in self.main_app.db.get_all_customers():
+        self.all_customers = self.main_app.db.get_all_customers()
+        for cust in self.all_customers:
             item = QListWidgetItem(f"Firma: {cust[2]} | Kontakt: {cust[1]} ({cust[3]})")
             item.setData(100, cust[0])
             self.customer_list.addItem(item)
+        self.filter_customers()
+
+    def filter_customers(self):
+        search_text = self.txt_search.text().lower()
+        for i in range(self.customer_list.count()):
+            item = self.customer_list.item(i)
+            item.setHidden(search_text not in item.text().lower())
 
     def select_customer(self):
         current_item = self.customer_list.currentItem()
-        if current_item:
+        if current_item and not current_item.isHidden():
             customer_id = current_item.data(100)
             self.main_app.show_select_screen(customer_id)
         else:
-            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie einen Kunden aus.")
+            QMessageBox.warning(self, "Fehler", "Bitte wählen Sie einen sichtbaren Kunden aus.")
 
     def add_customer(self):
         name = self.txt_name.text().strip()
@@ -65,4 +80,5 @@ class CustomerScreen(QWidget):
         self.txt_name.clear()
         self.txt_company.clear()
         self.txt_email.clear()
+        self.txt_search.clear()
         self.main_app.show_select_screen(cust_id)

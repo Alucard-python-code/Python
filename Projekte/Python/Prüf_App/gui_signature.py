@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel, QPushButton, QHBoxLayout, QMessageBox, QSpinBox
 from PyQt6.QtGui import QPainter, QPen, QImage
 from PyQt6.QtCore import Qt, QPoint
@@ -39,20 +40,20 @@ class SignatureScreen(QWidget):
         self.main_app = main_app
         layout = QVBoxLayout()
 
-        layout.addWidget(QLabel("<h2>Rechtssichere Signatur & Prüfintervall</h2>"))
+        layout.addWidget(QLabel("<h2>Rechtssichere Signatur & Intervalle</h2>"))
         
-        # NEU: Auswahl für das Prüfintervall
         interval_layout = QHBoxLayout()
         interval_layout.addWidget(QLabel("Nächste Prüfung fällig in (Monate):"))
         self.sb_months = QSpinBox()
-        self.sb_months.setRange(1, 48)  # Von 1 Monat bis 4 Jahre alles möglich
-        self.sb_months.setValue(12)     # Standardmäßig auf 12 Monate gesetzt
+        self.sb_months.setRange(1, 48)
+        self.sb_months.setValue(12)
         self.sb_months.setFixedWidth(80)
         interval_layout.addWidget(self.sb_months)
         interval_layout.addStretch()
         layout.addLayout(interval_layout)
 
-        layout.addWidget(QLabel("Bitte unterschreiben Sie im Feld unten:"))
+        layout.addWidget(QLabel("Der Kunde bestätigt mit seiner Unterschrift den Erhalt des Prüfergebnisses:"))
+
         self.pad = SignaturePad()
         layout.addWidget(self.pad)
 
@@ -68,24 +69,41 @@ class SignatureScreen(QWidget):
         layout.addLayout(btn_layout)
         self.setLayout(layout)
 
+    def calculate_due_date(self, months):
+        now = datetime.now()
+        new_month = now.month - 1 + months
+        new_year = now.year + (new_month // 12)
+        new_month = (new_month % 12) + 1
+        try:
+            return datetime(new_year, new_month, now.day)
+        except ValueError:
+            if new_month == 12:
+                next_mon = datetime(new_year + 1, 1, 1)
+            else:
+                next_mon = datetime(new_year, new_month + 1, 1)
+            return next_mon - timedelta(days=1)
+
     def finalize_report(self):
         customer = self.main_app.db.get_customer(self.main_app.current_customer_id)
         cust_id, name, company, email = customer
         
-        months = self.sb_months.value()  # Ausgelesener Wert aus der UI
+        months_intervall = self.sb_months.value()
+        due_date_obj = self.calculate_due_date(months_intervall)
+        due_date_str = due_date_obj.strftime("%d.%m.%Y")
+        
         sig_path = "temp_signature.png"
         self.pad.image.save(sig_path)
 
-        # 1. PDF generieren (Übergabe der Monate)
+        # 1. PDF generieren mit berechnetem Datum
         pdf_path = f"Pruefbericht_{company.replace(' ', '_')}.pdf"
-        PDFGenerator.create_pdf(pdf_path, customer, self.main_app.exam_results, sig_path, months)
+        PDFGenerator.create_pdf(pdf_path, customer, self.main_app.exam_results, sig_path, due_date_str, months_intervall)
 
-        # 2. ZIP Archivieren & E-Mail versenden
+        # 2. ZIP Archivieren & E-Mail versenden (reicht das Fälligkeitsdatum an den Mail-Inhalt weiter)
         mgr = ArchiveManager()
-        zip_path, success_mail = mgr.generate_archive_and_email(customer, pdf_path, sig_path)
+        zip_path, success_mail = mgr.generate_archive_and_email(customer, pdf_path, sig_path, due_date_str)
         
-        # 3. In lokaler Datenbank für Historie protokollieren (Übergabe der Monate)
-        self.main_app.db.add_protocol(self.main_app.current_customer_id, zip_path, months)
+        # 3. In lokaler Datenbank protokollieren
+        self.main_app.db.add_protocol(self.main_app.current_customer_id, zip_path, due_date_str)
 
         # Bereinigung temporärer Dateien
         if os.path.exists(sig_path): os.remove(sig_path)
@@ -96,5 +114,5 @@ class SignatureScreen(QWidget):
         QMessageBox.information(self, "Erfolg", msg)
 
         self.pad.clear()
-        self.sb_months.setValue(12)  # Zurücksetzen auf Standard
+        self.sb_months.setValue(12)
         self.main_app.show_customer_screen()
