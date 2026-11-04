@@ -2,11 +2,11 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
-from datetime import datetime, timedelta
+from datetime import datetime
 
 class PDFGenerator:
     @staticmethod
-    def create_pdf(filename, customer, exam_results, signature_path, months=12):
+    def create_pdf(filename, customer, exam_results, signature_path, due_date_str, months_intervall):
         doc = SimpleDocTemplate(filename, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
         story = []
         styles = getSampleStyleSheet()
@@ -14,12 +14,8 @@ class PDFGenerator:
         story.append(Paragraph(f"<b>UVV-PRÜFPROTOKOLL NACH GESETZLICHEN VORGABEN</b>", styles['Title']))
         story.append(Spacer(1, 15))
         
-        now = datetime.now()
-        # Gleiche mathematische Annäherung wie in der Datenbank
-        due_date = now + timedelta(days=months * 30)
-        
-        meta_text = f"<b>Prüfdatum:</b> {now.strftime('%d.%m.%Y %H:%M')}<br/>" \
-                    f"<b>Nächste Prüfung fällig am:</b> <font color='red'><b>{due_date.strftime('%d.%m.%Y')}</b></font> (Intervall: {months} Monate)<br/>" \
+        meta_text = f"<b>Prüfdatum:</b> {datetime.now().strftime('%d.%m.%Y %H:%M')}<br/>" \
+                    f"<b>Nächste Prüfung fällig am:</b> <font color='red'><b>{due_date_str}</b></font> (Intervall: {months_intervall} Monate)<br/>" \
                     f"<b>Firma:</b> {customer}<br/>" \
                     f"<b>Ansprechpartner:</b> {customer}<br/>" \
                     f"<b>Kunden-E-Mail:</b> {customer}"
@@ -38,7 +34,7 @@ class PDFGenerator:
             for res in results:
                 table_data.append([res['frage'], res['status'], res['bemerkung']])
 
-            t = Table (table_data, colWidths=[250, 100, 200])
+            t = Table(table_data, colWidths= [250, 100, 200])
             t.setStyle(TableStyle([
                 ('BACKGROUND', (0,0), (-1,0), colors.grey),
                 ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),

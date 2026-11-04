@@ -1,6 +1,4 @@
 import sqlite3
-from datetime import datetime
-from newsletter import timedelta # Für präzisere Monatsberechnung nutzen wir eine einfache Annäherung via Tage
 
 class Database:
     def __init__(self, db_name="uvv_pruefungen_pro.db"):
@@ -45,19 +43,13 @@ class Database:
         cursor.execute("SELECT id, name, company, email FROM customers WHERE id = ?", (customer_id,))
         return cursor.fetchone()
 
-    def add_protocol(self, customer_id, zip_path, months=12):
+    def add_protocol(self, customer_id, zip_path, due_date_str):
         cursor = self.conn.cursor()
-        now = datetime.now()
-        date_str = now.strftime("%d.%m.%Y %H:%M")
-        
-        # Dynamische Berechnung: Monate * 30 Tage als Annäherung für das Fälligkeitsdatum
-        days_to_add = months * 30
-        from datetime import timedelta
-        due_date = now + timedelta(days=days_to_add)
-        due_str = due_date.strftime("%d.%m.%Y")
+        from datetime import datetime
+        date_str = datetime.now().strftime("%d.%m.%Y %H:%M")
         
         cursor.execute("INSERT INTO protocols (customer_id, date_checked, next_due, zip_path) VALUES (?, ?, ?, ?)", 
-                       (customer_id, date_str, due_str, zip_path))
+                       (customer_id, date_str, due_date_str, zip_path))
         self.conn.commit()
 
     def get_history(self):
