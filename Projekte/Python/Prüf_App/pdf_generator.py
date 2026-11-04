@@ -1,68 +1,68 @@
-import os
 from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib import colors
+from datetime import datetime, timedelta
 
-def generate_anlage_pdf(pdf_name, kunde, standort, anlage, sig_path):
-    doc = SimpleDocTemplate(pdf_name, pagesize=letter, rightMargin=30, leftMargin=30, topMargin=30, bottomMargin=30)
-    story = []
-    
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle('T1', parent=styles['Heading1'], fontSize=16, spaceAfter=15)
-    section_style = ParagraphStyle('T2', parent=styles['Heading2'], fontSize=12, spaceBefore=10, spaceAfter=5)
-    text_style = styles['Normal']
-    
-    # Kopfzeilen des PDF
-    story.append(Paragraph(f"<b>PRÜFBERICHT: {anlage['typ'].upper()}</b>", title_style))
-    story.append(Paragraph(f"<b>Anlage-ID / Ort:</b> {anlage['bezeichnung']}", section_style))
-    story.append(Spacer(1, 10))
-    
-    # Stammdaten-Tabelle
-    stammdaten = [
-        [Paragraph("<b>Kunde / Betreiber:</b>", text_style), Paragraph(kunde, text_style)],
-        [Paragraph("<b>Standort / Werk:</b>", text_style), Paragraph(standort, text_style)],
-        [Paragraph("<b>Hersteller / Modell:</b>", text_style), Paragraph(anlage['hersteller'], text_style)]
-    ]
-    t_stamm = Table(stammdaten, colWidths=[130, 370])
-    t_stamm.setStyle(TableStyle([
-        ('BACKGROUND', (0,0), (-1,-1), colors.lightgrey),
-        ('GRID', (0,0), (-1,-1), 0.5, colors.white),
-        ('PADDING', (0,0), (-1,-1), 5),
-    ]))
-    story.append(t_stamm)
-    story.append(Spacer(1, 15))
-    
-    # Befunde
-    story.append(Paragraph("<b>Prüfergebnisse Komponenten:</b>", section_style))
-    story.append(Paragraph(f"• Antrieb & Mechanik: {'[X] i.O.' if anlage['antrieb_io'] else '[ ] n.i.O.'}", text_style))
-    story.append(Paragraph(f"• Notentriegelung & Sicherheit: {'[X] i.O.' if anlage['notaus_io'] else '[ ] n.i.O.'}", text_style))
-    story.append(Paragraph(f"• Gehäuse & Beschilderung: {'[X] i.O.' if anlage['allgemein_io'] else '[ ] n.i.O.'}", text_style))
-    story.append(Spacer(1, 15))
-    
-    # Unterschrift einbinden
-    story.append(Paragraph("<b>Rechtlicher Abschluss & Unterschrift:</b>", section_style))
-    if os.path.exists(sig_path):
-        try:
-            img_sig = Image(sig_path, width=180, height=65)
-            img_sig.hAlign = 'LEFT'
-            story.append(img_sig)
-        except:
-            pass
-            
-    story.append(Spacer(1, 15))
-    
-    # Bilder einbetten
-    if anlage['fotos']:
-        story.append(Paragraph("<b>Zugehörige Mängelfotos dieser Anlage:</b>", section_style))
-        for img_file in anlage['fotos']:
-            if os.path.exists(img_file):
-                try:
-                    pdf_img = Image(img_file, width=220, height=150)
-                    pdf_img.hAlign = 'LEFT'
-                    story.append(pdf_img)
-                    story.append(Spacer(1, 10))
-                except:
-                    pass
+class PDFGenerator:
+    @staticmethod
+    def create_pdf(filename, customer, exam_results, signature_path, months=12):
+        doc = SimpleDocTemplate(filename, pagesize=letter, rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40)
+        story = []
+        styles = getSampleStyleSheet()
+
+        story.append(Paragraph(f"<b>UVV-PRÜFPROTOKOLL NACH GESETZLICHEN VORGABEN</b>", styles['Title']))
+        story.append(Spacer(1, 15))
         
-    doc.build(story)
+        now = datetime.now()
+        # Gleiche mathematische Annäherung wie in der Datenbank
+        due_date = now + timedelta(days=months * 30)
+        
+        meta_text = f"<b>Prüfdatum:</b> {now.strftime('%d.%m.%Y %H:%M')}<br/>" \
+                    f"<b>Nächste Prüfung fällig am:</b> <font color='red'><b>{due_date.strftime('%d.%m.%Y')}</b></font> (Intervall: {months} Monate)<br/>" \
+                    f"<b>Firma:</b> {customer}<br/>" \
+                    f"<b>Ansprechpartner:</b> {customer}<br/>" \
+                    f"<b>Kunden-E-Mail:</b> {customer}"
+        story.append(Paragraph(meta_text, styles['Normal']))
+        story.append(Spacer(1, 20))
+
+        for exam_type, results in exam_results.items():
+            from checklist_data import CHECKLISTS
+            info = CHECKLISTS[exam_type]
+            
+            story.append(Paragraph(f"<b>Prüfgegenstand: {info['title']}</b>", styles['Heading2']))
+            story.append(Paragraph(f"<i>Norm-Grundlage: {info['norm']}</i>", styles['Italic']))
+            story.append(Spacer(1, 5))
+
+            table_data = [["Prüfkriterium / Vorgabe", "Status", "Bemerkung / Mängel"]]
+            for res in results:
+                table_data.append([res['frage'], res['status'], res['bemerkung']])
+
+            t = Table (table_data, colWidths=[250, 100, 200])
+            t.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.grey),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('BOTTOMPADDING', (0,0), (-1,0), 6),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.black),
+                ('VALIGN', (0,0), (-1,-1), 'TOP'),
+            ]))
+            story.append(t)
+            story.append(Spacer(1, 15))
+
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("<b>Rechtsverbindliche Abnahme-Unterschrift Kunde:</b>", styles['Heading3']))
+        story.append(Spacer(1, 5))
+        try:
+            story.append(Image(signature_path, width=200, height=100))
+        except:
+            story.append(Paragraph("[Handzeichen Grafikfehler]", styles['Normal']))
+        
+        story.append(Spacer(1, 30))
+        disclaimer_style = ParagraphStyle('Disclaimer', parent=styles['Normal'], fontSize=7, textColor=colors.gray)
+        disclaimer_text = "This is for informational purposes only. For medical advice or diagnosis, consult a professional. AI responses may include mistakes. " \
+                          "Hinweis: Dieses Dokument ersetzt im Schadensfall nicht die behördliche Überprüfung der Originalkomponenten durch zertifizierte Sachverständige."
+        story.append(Paragraph(disclaimer_text, disclaimer_style))
+
+        doc.build(story)
