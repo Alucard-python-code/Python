@@ -4,8 +4,6 @@
 #include <WDT.h>
 #include "Configuration.h"
 
-extern ModulinoRelay relaisTanken;
-extern ModulinoRelay relaisLeeren;
 extern ModulinoKnob encoderModulino;
 
 extern volatile unsigned long flowImpulse;
@@ -16,47 +14,36 @@ extern float aktuellerDruckMbar;
 extern float getankteMengeMl;
 extern float durchflussMlMin;
 extern unsigned long lastFlowCalcTime;
-extern float akkuSpannungVolt; // Referenz auf die globale Volt-Variable
+extern float akkuSpannungVolt; 
 
 static int aktuelleMotorLeistung = 0;
 
 inline void setMotor(int zielSpeedPercent, bool vorwaerts) {
-    int tatsaechlichesZiel = (zielSpeedPercent == 0) ? 0 : (vorwaerts ? abs(zielSpeedPercent) : -abs(zielSpeedPercent));
-    if (aktuelleMotorLeistung == tatsaechlichesZiel) return;
+  int tatsaechlichesZiel = (zielSpeedPercent == 0) ? 0 : (vorwaerts ? abs(zielSpeedPercent) : -abs(zielSpeedPercent));
+  if (aktuelleMotorLeistung == tatsaechlichesZiel) return;
 
-    if (tatsaechlichesZiel == 0) {
-        relaisTanken.turnOff();
-        relaisLeeren.turnOff();
-    } else if (tatsaechlichesZiel > 0) {
-        relaisTanken.turnOn();
-        relaisLeeren.turnOff();
-    } else {
-        relaisTanken.turnOff();
-        relaisLeeren.turnOn();
-    }
+  unsigned long rampTimer = millis();
+  while (aktuelleMotorLeistung != tatsaechlichesZiel) {
+    WDT.refresh(); 
+    if (millis() - rampTimer >= 10) { 
+      if (aktuelleMotorLeistung < tatsaechlichesZiel) aktuelleMotorLeistung++;
+      else aktuelleMotorLeistung--;
 
-    unsigned long rampTimer = millis();
-    while (aktuelleMotorLeistung != tatsaechlichesZiel) {
-        WDT.refresh(); 
-        if (millis() - rampTimer >= 10) { 
-            if (aktuelleMotorLeistung < tatsaechlichesZiel) aktuelleMotorLeistung++;
-            else aktuelleMotorLeistung--;
-            
-            int pwmValue = map(abs(aktuelleMotorLeistung), 0, 100, 0, 255);
-            if (aktuelleMotorLeistung == 0) {
-                digitalWrite(PIN_H_BRUECKE_IN1, LOW);
-                digitalWrite(PIN_H_BRUECKE_IN2, LOW);
-            } else if (aktuelleMotorLeistung > 0) {
-                digitalWrite(PIN_H_BRUECKE_IN1, HIGH);
-                digitalWrite(PIN_H_BRUECKE_IN2, LOW);
-            } else {
-                digitalWrite(PIN_H_BRUECKE_IN1, LOW);
-                digitalWrite(PIN_H_BRUECKE_IN2, HIGH);
-            }
-            analogWrite(PIN_H_BRUECKE_ENA, pwmValue);
-            rampTimer = millis();
-        }
+      int pwmValue = map(abs(aktuelleMotorLeistung), 0, 100, 0, 255);
+      if (aktuelleMotorLeistung == 0) {
+        digitalWrite(PIN_H_BRUECKE_IN1, LOW);
+        digitalWrite(PIN_H_BRUECKE_IN2, LOW);
+      } else if (aktuelleMotorLeistung > 0) {
+        digitalWrite(PIN_H_BRUECKE_IN1, HIGH);
+        digitalWrite(PIN_H_BRUECKE_IN2, LOW);
+      } else {
+        digitalWrite(PIN_H_BRUECKE_IN1, LOW);
+        digitalWrite(PIN_H_BRUECKE_IN2, HIGH);
+      }
+      analogWrite(PIN_H_BRUECKE_ENA, pwmValue);
+      rampTimer = millis();
     }
+  }
 }
 
 inline void updateSensors() {
