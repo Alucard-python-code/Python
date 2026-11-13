@@ -200,6 +200,8 @@ class SimulatedBQ76930(_RegisterIO):
         self.regs[ADCOFFSET] = self.OFFSET_MV & 0xFF
         self.regs[SYS_STAT] = ST_XREADY            # wie nach dem Booten
         self._last = time.monotonic()
+        self._i_cached: Optional[float] = None
+        self._i_cached_t = 0.0
         self._cc_acc = 0.0
         self._cc_n = 0
         self._last_cc = time.monotonic()
@@ -216,7 +218,11 @@ class SimulatedBQ76930(_RegisterIO):
         dt = now - self._last
         self._last = now
         ctrl2 = self.regs[SYS_CTRL2]
-        i = self.current_a()
+        # Strom (inkl. Rauschen) nur alle 250 ms neu bestimmen – wie die CC-Wandlung des BQ.
+        # Sonst würden Zell- und Packspannung aus demselben Messzyklus nicht zusammenpassen.
+        if self._i_cached is None or now - self._i_cached_t >= 0.25:
+            self._i_cached, self._i_cached_t = self.current_a(), now
+        i = self._i_cached
         if i > 0 and not ctrl2 & CTRL2_CHG_ON:
             i = 0.0
         if i < 0 and not ctrl2 & CTRL2_DSG_ON:

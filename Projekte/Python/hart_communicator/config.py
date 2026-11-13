@@ -204,6 +204,39 @@ class Input:
     GRAB_TOUCH_DEVICE = _env_bool("GRAB_TOUCH_DEVICE", True)   # Touch auf Kernel-Ebene sperren
 
 
+# ---------------------------------------------------------------------------
+# Kamera / QR / Ringlicht
+# ---------------------------------------------------------------------------
+class Camera:
+    PREVIEW_SIZE = (1280, 960)
+    DECODE_SIZE = (640, 480)           # niedrige Auflösung reicht für QR, spart CPU
+    DECODE_FPS = 8
+    DUPLICATE_SUPPRESS_S = 3.0         # gleicher Code innerhalb dieser Zeit = 1 Scan
+    JPEG_QUALITY = 85
+    # PWM-Frequenz des Ringlichts: hoch wählen! Bei ~1 kHz erzeugt der Rolling Shutter
+    # sichtbare Streifen im Bild. 20 kHz liegt über dem Hörbereich und meist banding-frei
+    # (vom LED-Treiber abhängig – ggf. anpassen).
+    LIGHT_PWM_HZ = _env_int("CAM_LIGHT_PWM_HZ", 20000)
+    LIGHT_PWM_CHANNEL = 1              # GPIO13 = PWM0 Kanal 1
+    LIGHT_DEFAULT_PERCENT = 60
+    SETTINGS_FILE = DATA_DIR / "camera_settings.json"
+
+
+# ---------------------------------------------------------------------------
+# Etikettendrucker SUPVAN T50M Pro (Bluetooth Classic / SPP)
+# ---------------------------------------------------------------------------
+class Printer:
+    BACKEND = os.environ.get("PRINTER_BACKEND", "cups")      # cups | file
+    CUPS_QUEUE = os.environ.get("PRINTER_CUPS_QUEUE", "SUPVAN_T50M")
+    BT_ADDRESS = os.environ.get("PRINTER_BT_ADDRESS", "")    # z.B. "A4:93:40:81:EB:DC"
+    RFCOMM_CHANNEL = _env_int("PRINTER_RFCOMM_CHANNEL", 1)
+    LABEL_MM = (40, 30)
+    DOTS_PER_MM = 8                    # 203 dpi
+    LABEL_DIR = DATA_DIR / "labels"
+    STATUS_INTERVAL_S = 30.0
+    FONT_DIR = os.environ.get("FONT_DIR", "/usr/share/fonts/truetype/dejavu")
+
+
 # Soft-Power: Empfohlen ist dtoverlay=gpio-poweroff,gpiopin=25,active_low=1
 # -> der Kernel hält GPIO25 bis zum letzten Moment des Shutdowns HIGH.
 POWER_LATCH_VIA_OVERLAY = _env_bool("POWER_LATCH_VIA_OVERLAY", True)

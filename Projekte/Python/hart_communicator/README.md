@@ -52,7 +52,8 @@ hart_modem  battery_  rtc_      feedback_  rotation_  input_    camera_qr
 | `feedback_manager.py` | DRV2605L-Haptik + synthetisierte Signaltöne (MAX98357A), Ereignis-Prioritäten | ✅ |
 | `rotation_daemon.py` | LIS3DH-Lageerkennung, Hysterese + Entprellung, Rotation-Lock, Dock-Querformat, `wlr-randr` | ✅ |
 | `input_monitor.py` | Hotplug Maus/Tastatur (evdev + pyudev), Touch-Sperre per Kernel-Grab, Putzmodus-Schalter GPIO16 | ✅ |
-| `camera_qr.py`, `label_printer.py` | Kamera + PWM-Licht, SUPVAN T50M Pro | Schritt 4 |
+| `camera_qr.py` | QR-Scan (pyzbar/OpenCV), Beweisfotos mit SHA-256, MJPEG-Vorschau, PWM-Ringlicht + Taschenlampe | ✅ |
+| `label_printer.py` | Prüfplakette 40×30 mm, Druck über CUPS (supvan-cups), Bluetooth-Statusabfrage | ✅ |
 | `database.py`, `telemetry_logger.py` | Auftrags-DB, Grafana-DB | Schritt 5 |
 | `pdf_generator.py`, `dual_usb_export.py` | Auftrags-PDF, USB-Stick/Gadget-Export | Schritt 6 |
 | `app.py`, `templates/`, `static/` | Web-UI, Workflow, Statusleiste | Schritt 7 |
@@ -124,6 +125,9 @@ dtoverlay=dwc2,dr_mode=otg
   `ACTIVE_24V` ist für Stellungsregler deshalb gesperrt.
 * **Rotation & Eingabe:** Einrichtung siehe `deploy/SETUP_INPUT_ROTATION.md` (Gruppen `input`/`i2c`,
   Touch an DSI-Ausgang binden, Einbaulage kalibrieren).
+* **Etikettendrucker:** Der SUPVAN T50M Pro nutzt Bluetooth *Classic* (RFCOMM), nicht BLE.
+  Druck über CUPS mit [supvan-cups](https://github.com/heeen/supvan-cups), siehe `deploy/SETUP_PRINTER.md`.
+* **Ringlicht-PWM** mit 20 kHz statt ~1 kHz, sonst entstehen durch den Rolling Shutter Streifen im Kamerabild.
 * **sudo-Rechte** für Uhrzeit und Poweroff: `deploy/sudoers.d-hart-communicator`.
 
 ## Simulation

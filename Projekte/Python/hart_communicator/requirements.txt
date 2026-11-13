@@ -41,8 +41,9 @@ pyzbar>=0.1.9
 opencv-python-headless>=4.8 ; platform_machine != "aarch64"
 numpy>=1.24
 
-# --- Bluetooth-LE-Etikettendrucker -------------------------------------------
-bleak>=0.22
+# --- Etikettendrucker --------------------------------------------------------
+# Der SUPVAN T50M Pro nutzt Bluetooth CLASSIC (RFCOMM) -> Python-Standardbibliothek
+# (socket.AF_BLUETOOTH) + CUPS-Treiber supvan-cups. `bleak` (nur BLE) wird nicht benötigt.
 
 # --- PDF / QR / Bilder -------------------------------------------------------
 reportlab>=4.0
