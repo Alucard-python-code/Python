@@ -1,0 +1,5 @@
+# /etc/sudoers.d/hart-communicator  (Rechte 0440, prüfen mit: sudo visudo -c)
+# Dienstbenutzer "hart" darf ohne Passwort genau diese Befehle ausführen:
+hart ALL=(root) NOPASSWD: /usr/bin/date -u -s @*
+hart ALL=(root) NOPASSWD: /usr/sbin/hwclock --systohc --utc
+hart ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff

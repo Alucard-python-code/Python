@@ -1,0 +1,56 @@
+# =============================================================================
+# HART-Feldcommunicator & Kalibrier-Assistent – Python-Abhängigkeiten
+# Zielsystem: Raspberry Pi CM4, Raspberry Pi OS Bookworm 64-Bit, Python 3.11+
+#
+# Installation auf dem CM4 (venv MIT Zugriff auf Systempakete, wegen picamera2/libcamera):
+#   sudo apt install -y python3-picamera2 python3-opencv python3-lgpio libzbar0 \
+#                       wlr-randr i2c-tools
+#   python3 -m venv --system-site-packages .venv
+#   . .venv/bin/activate && pip install -r requirements.txt
+#
+# Entwicklungs-PC (ohne Hardware): pip install -r requirements.txt
+#   -> Alle Treiber fallen automatisch auf die Simulation zurück (HART_SIM=auto).
+# =============================================================================
+
+# --- Web-UI / Backend --------------------------------------------------------
+Flask>=3.0,<4
+Flask-SocketIO>=5.3,<6
+simple-websocket>=1.0
+
+# --- HART-Modem (AD5700 an UART) ---------------------------------------------
+pyserial>=3.5
+
+# --- I2C: INA226, BQ76930, DS3231, DRV2605L, LIS3DH --------------------------
+smbus2>=0.4.3
+
+# --- GPIO (gpiozero nutzt auf Bookworm das lgpio-Backend) --------------------
+gpiozero>=2.0
+# lgpio: auf dem Pi bevorzugt per apt (python3-lgpio); pip-Variante nur Linux/ARM
+lgpio>=0.2.2.0 ; platform_system == "Linux" and platform_machine == "aarch64"
+# Hardware-PWM für das LED-Ringlicht an GPIO13 (PWM1) – benötigt dtoverlay=pwm-2chan
+rpi-hardware-pwm>=0.2 ; platform_system == "Linux" and platform_machine == "aarch64"
+
+# --- Eingabegeräte-Hotplug (Maus/Tastatur) -----------------------------------
+evdev>=1.7 ; platform_system == "Linux"
+pyudev>=0.24 ; platform_system == "Linux"
+
+# --- Kamera / QR -------------------------------------------------------------
+# picamera2 NUR per apt (python3-picamera2) – nicht über pip installieren!
+pyzbar>=0.1.9
+# Auf dem Pi python3-opencv aus apt verwenden; auf dem PC reicht headless:
+opencv-python-headless>=4.8 ; platform_machine != "aarch64"
+numpy>=1.24
+
+# --- Bluetooth-LE-Etikettendrucker -------------------------------------------
+bleak>=0.22
+
+# --- PDF / QR / Bilder -------------------------------------------------------
+reportlab>=4.0
+qrcode[pil]>=7.4
+Pillow>=10.0
+
+# --- System / Telemetrie -----------------------------------------------------
+psutil>=5.9
+
+# --- Entwicklung / Tests -----------------------------------------------------
+pytest>=8.0
