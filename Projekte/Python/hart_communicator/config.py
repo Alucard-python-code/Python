@@ -172,6 +172,38 @@ HAPTIC_ACTUATOR = os.environ.get("HAPTIC_ACTUATOR", "ERM")  # "ERM" oder "LRA"
 LOOP_AUTO_PASSIVE_MIN = _env_float("LOOP_AUTO_PASSIVE_MIN", 30.0)
 
 
+# ---------------------------------------------------------------------------
+# Display-Rotation (LIS3DH + wlr-randr)
+# ---------------------------------------------------------------------------
+class Display:
+    OUTPUT_NAME = os.environ.get("DISPLAY_OUTPUT") or None   # None = automatisch (z.B. "DSI-1")
+    NATIVE_SIZE = (720, 1280)          # Touch Display 2: nativ Hochformat
+    # Einbaulage des LIS3DH relativ zum Display: (Quellachse, Vorzeichen) für
+    # Display-X (rechts) und Display-Y (oben). Mit `python rotation_daemon.py --calibrate` prüfen.
+    AXIS_X = (os.environ.get("ACCEL_AXIS_X", "x"), _env_int("ACCEL_SIGN_X", 1))
+    AXIS_Y = (os.environ.get("ACCEL_AXIS_Y", "y"), _env_int("ACCEL_SIGN_Y", 1))
+    # Physische Lage (Grad, im Uhrzeigersinn gedreht) -> wlr-randr --transform
+    TRANSFORM_FOR = {0: "normal", 90: "90", 180: "180", 270: "270"}
+    HYSTERESIS_DEG = 15.0              # Zusatzwinkel über die 45°-Grenze hinaus
+    DEBOUNCE_S = 0.6                   # Lage muss so lange stabil sein
+    FLAT_IN_PLANE_G = 0.45             # darunter liegt das Gerät flach -> nicht drehen
+    DOCK_ORIENTATION = _env_int("DOCK_ORIENTATION", 90)   # im Dock fest Querformat (None = frei)
+    STATE_FILE = DATA_DIR / "rotation_state.json"
+
+
+# ---------------------------------------------------------------------------
+# Eingabegeräte
+# ---------------------------------------------------------------------------
+class Input:
+    BLOCK_TOUCH_WITH_MOUSE = _env_bool("BLOCK_TOUCH_WITH_MOUSE", True)
+    # Geräte, die nie als Tastatur/Maus zählen (Teilstring des evdev-Namens, klein)
+    IGNORE_NAMES = ("vc4-hdmi", "pwr_button", "gpio_keys", "gpio-keys", "power button",
+                    "sleep button", "lid switch", "video bus", "headphone", "hdmi")
+    MIN_LETTER_KEYS = 20               # echte Tastatur: mindestens so viele Buchstabentasten
+    POLL_INTERVAL_S = 2.0              # Fallback-Hotplug ohne pyudev
+    GRAB_TOUCH_DEVICE = _env_bool("GRAB_TOUCH_DEVICE", True)   # Touch auf Kernel-Ebene sperren
+
+
 # Soft-Power: Empfohlen ist dtoverlay=gpio-poweroff,gpiopin=25,active_low=1
 # -> der Kernel hält GPIO25 bis zum letzten Moment des Shutdowns HIGH.
 POWER_LATCH_VIA_OVERLAY = _env_bool("POWER_LATCH_VIA_OVERLAY", True)

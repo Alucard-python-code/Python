@@ -50,7 +50,8 @@ hart_modem  battery_  rtc_      feedback_  rotation_  input_    camera_qr
 | `loop_relays.py` | G6K-Relais: Passiv / Passiv+250 Ω / Aktiv 24 V mit Verriegelungen | ✅ |
 | `rtc_manager.py` | DS3231 (Kernel- oder I2C-Backend), Zeitquellen-Nachweis NTP/RTC/UNGEPRÜFT | ✅ |
 | `feedback_manager.py` | DRV2605L-Haptik + synthetisierte Signaltöne (MAX98357A), Ereignis-Prioritäten | ✅ |
-| `rotation_daemon.py`, `input_monitor.py` | LIS3DH/wlr-randr, Maus/Tastatur/Touch-Lock | Schritt 3 |
+| `rotation_daemon.py` | LIS3DH-Lageerkennung, Hysterese + Entprellung, Rotation-Lock, Dock-Querformat, `wlr-randr` | ✅ |
+| `input_monitor.py` | Hotplug Maus/Tastatur (evdev + pyudev), Touch-Sperre per Kernel-Grab, Putzmodus-Schalter GPIO16 | ✅ |
 | `camera_qr.py`, `label_printer.py` | Kamera + PWM-Licht, SUPVAN T50M Pro | Schritt 4 |
 | `database.py`, `telemetry_logger.py` | Auftrags-DB, Grafana-DB | Schritt 5 |
 | `pdf_generator.py`, `dual_usb_export.py` | Auftrags-PDF, USB-Stick/Gadget-Export | Schritt 6 |
@@ -121,6 +122,8 @@ dtoverlay=dwc2,dr_mode=otg
 * **Stellungsregler** sind stromgeführt: Für den Werkbank-Betrieb ohne Leitsystem braucht es eine
   mA-Stromquelle (z.B. AD5420/AD5421). Diese ist bisher nicht in der Stückliste.
   `ACTIVE_24V` ist für Stellungsregler deshalb gesperrt.
+* **Rotation & Eingabe:** Einrichtung siehe `deploy/SETUP_INPUT_ROTATION.md` (Gruppen `input`/`i2c`,
+  Touch an DSI-Ausgang binden, Einbaulage kalibrieren).
 * **sudo-Rechte** für Uhrzeit und Poweroff: `deploy/sudoers.d-hart-communicator`.
 
 ## Simulation

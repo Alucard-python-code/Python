@@ -1,0 +1,14 @@
+<?xml version="1.0"?>
+<!--
+  Ausschnitt für ~/.config/labwc/rc.xml (Benutzer der Kiosk-Sitzung).
+
+  Bindet den Touchscreen an den DSI-Ausgang. Dadurch dreht `wlr-randr --transform`
+  (rotation_daemon.py) Bild UND Touch-Koordinaten gemeinsam, ohne Neustart.
+
+  Gerätenamen ermitteln:   sudo libinput list-devices | grep -A1 -i touch
+  Ausgangsnamen ermitteln: wlr-randr
+  Danach labwc neu laden:  labwc --reconfigure
+-->
+<labwc_config>
+  <touch deviceName="REPLACE_WITH_TOUCH_DEVICE_NAME" mapToOutput="DSI-1" mouseEmulation="no" />
+</labwc_config>
