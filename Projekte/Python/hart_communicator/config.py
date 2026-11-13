@@ -237,6 +237,28 @@ class Printer:
     FONT_DIR = os.environ.get("FONT_DIR", "/usr/share/fonts/truetype/dejavu")
 
 
+# ---------------------------------------------------------------------------
+# Prüfbericht (PDF) – Angaben des ausführenden Betriebs
+# ---------------------------------------------------------------------------
+class Company:
+    NAME = os.environ.get("COMPANY_NAME", "Muster MSR-Service GmbH")
+    ADDRESS = os.environ.get("COMPANY_ADDRESS", "Musterstraße 1, 12345 Musterstadt")
+    CONTACT = os.environ.get("COMPANY_CONTACT", "Tel. 01234 56789 · service@example.com")
+    RECAL_INTERVAL_MONTHS = _env_int("RECAL_INTERVAL_MONTHS", 12)
+
+
+# ---------------------------------------------------------------------------
+# USB-Export (Stick im Host-Modus / g_mass_storage am PC)
+# ---------------------------------------------------------------------------
+class Export:
+    LABEL = "HART_EXPORT"
+    IMAGE_FILE = DATA_DIR / "hart_export.img"
+    IMAGE_SIZE_MB = _env_int("EXPORT_IMAGE_MB", 512)
+    STAGING_DIR = DATA_DIR / "export_staging"
+    UDC_DIR = Path("/sys/class/udc")
+    GADGET_CONNECT_TIMEOUT_S = 8.0      # so lange auf "configured" (PC) warten
+
+
 # Soft-Power: Empfohlen ist dtoverlay=gpio-poweroff,gpiopin=25,active_low=1
 # -> der Kernel hält GPIO25 bis zum letzten Moment des Shutdowns HIGH.
 POWER_LATCH_VIA_OVERLAY = _env_bool("POWER_LATCH_VIA_OVERLAY", True)

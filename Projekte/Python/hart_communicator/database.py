@@ -515,16 +515,20 @@ class Database:
         customer = self.customer(o["customer_id"])
         cals = self.q("SELECT * FROM calibrations WHERE order_id=? AND result IN (?,?) ORDER BY started_at",
                       (order_id, RESULT_PASS, RESULT_FAIL))
-        latest: dict[int, dict] = {}
-        for c in cals:                                   # Wiederholungsprüfung ersetzt frühere
-            latest[c["device_id"]] = c
+        # Je Messstelle (TAG) zählt die LETZTE Prüfung im Auftrag. Wiederholungen und ein
+        # Gerätetausch innerhalb des Auftrags ersetzen frühere Prüfungen derselben Messstelle.
+        tags = {c["id"]: self.device(c["device_id"])["tag"] for c in cals}
+        latest: dict[str, dict] = {}
+        for c in cals:
+            latest[tags[c["id"]]] = c
         entries = []
-        for c in sorted(latest.values(), key=lambda c: self.device(c["device_id"])["tag"]):
+        for tag in sorted(latest):
+            c = latest[tag]
             dev = self.device(c["device_id"])
             prev = self.q1("SELECT * FROM devices WHERE replaced_by=?", (dev["id"],))
             entries.append({"calibration": c, "device": dev, "points": self.points(c["id"]),
                             "photos": self.photos(calibration_id=c["id"]),
-                            "replaced_device": prev, "attempts": sum(1 for x in cals if x["device_id"] == dev["id"])})
+                            "replaced_device": prev, "attempts": sum(1 for x in cals if tags[x["id"]] == tag)})
         summary = {
             "calibrations": len(entries),
             "passed": sum(1 for e in entries if e["calibration"]["result"] == RESULT_PASS),

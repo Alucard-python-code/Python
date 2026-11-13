@@ -4,7 +4,7 @@
 #
 # Installation auf dem CM4 (venv MIT Zugriff auf Systempakete, wegen picamera2/libcamera):
 #   sudo apt install -y python3-picamera2 python3-opencv python3-lgpio libzbar0 \
-#                       wlr-randr i2c-tools
+#                       wlr-randr i2c-tools dosfstools mtools udisks2 fonts-dejavu-core
 #   python3 -m venv --system-site-packages .venv
 #   . .venv/bin/activate && pip install -r requirements.txt
 #

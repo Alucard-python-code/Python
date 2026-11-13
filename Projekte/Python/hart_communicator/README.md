@@ -12,6 +12,7 @@ pip install -r requirements.txt
 python hart_modem.py                 # Simuliertes Rosemount 3051 identifizieren
 python hart_modem.py fisher_dvc6200  # anderes Szenario
 python battery_bms.py                # 8S-BMS-Simulation inkl. Fehlerfall
+python demo_data.py                  # Beispielauftrag + Prüfbericht-PDF in data/demo/
 pytest -q                            # Tests der Kernmodule
 ```
 
@@ -56,7 +57,10 @@ hart_modem  battery_  rtc_      feedback_  rotation_  input_    camera_qr
 | `label_printer.py` | Prüfplakette 40×30 mm, Druck über CUPS (supvan-cups), Bluetooth-Statusabfrage | ✅ |
 | `database.py` | Kunden, Aufträge (max. 1 offen), Geräte mit Tauschhistorie, Fälle A/B/C, Kalibrierungen, Fotos | ✅ |
 | `telemetry_logger.py` | Grafana-Zeitreihe (15 s), Betriebsstunden Feld/Dock/HART, Audit-Log, Statistik | ✅ |
-| `pdf_generator.py`, `dual_usb_export.py` | Auftrags-PDF, USB-Stick/Gadget-Export | Schritt 6 |
+| `calibration.py` | Auswertung je Prüfpunkt: Abweichung PV/mA in % der Spanne, D/A-Vergleich | ✅ |
+| `pdf_generator.py` | Auftrags-PDF: Deckblatt mit Summary + Inhaltsverzeichnis, 1 Seite je TAG, Kunden-Rückläufer | ✅ |
+| `dual_usb_export.py` | Dock-Erkennung, Exportpaket mit SHA-256-Manifest, USB-Stick (udisks2) oder PC (g_mass_storage, schreibgeschützt) | ✅ |
+| `demo_data.py` | Beispielauftrag aus den simulierten Geräten (Entwicklung, Schulung, PDF-Vorschau) | ✅ |
 | `app.py`, `templates/`, `static/` | Web-UI, Workflow, Statusleiste | Schritt 7 |
 
 ### Threading-Modell

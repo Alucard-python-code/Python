@@ -3,3 +3,6 @@
 hart ALL=(root) NOPASSWD: /usr/bin/date -u -s @*
 hart ALL=(root) NOPASSWD: /usr/sbin/hwclock --systohc --utc
 hart ALL=(root) NOPASSWD: /usr/bin/systemctl poweroff
+# USB-Export an den PC (schreibgeschützter Wechseldatenträger HART_EXPORT)
+hart ALL=(root) NOPASSWD: /usr/sbin/modprobe g_mass_storage *
+hart ALL=(root) NOPASSWD: /usr/sbin/modprobe -r g_mass_storage
