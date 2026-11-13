@@ -54,7 +54,8 @@ hart_modem  battery_  rtc_      feedback_  rotation_  input_    camera_qr
 | `input_monitor.py` | Hotplug Maus/Tastatur (evdev + pyudev), Touch-Sperre per Kernel-Grab, Putzmodus-Schalter GPIO16 | ✅ |
 | `camera_qr.py` | QR-Scan (pyzbar/OpenCV), Beweisfotos mit SHA-256, MJPEG-Vorschau, PWM-Ringlicht + Taschenlampe | ✅ |
 | `label_printer.py` | Prüfplakette 40×30 mm, Druck über CUPS (supvan-cups), Bluetooth-Statusabfrage | ✅ |
-| `database.py`, `telemetry_logger.py` | Auftrags-DB, Grafana-DB | Schritt 5 |
+| `database.py` | Kunden, Aufträge (max. 1 offen), Geräte mit Tauschhistorie, Fälle A/B/C, Kalibrierungen, Fotos | ✅ |
+| `telemetry_logger.py` | Grafana-Zeitreihe (15 s), Betriebsstunden Feld/Dock/HART, Audit-Log, Statistik | ✅ |
 | `pdf_generator.py`, `dual_usb_export.py` | Auftrags-PDF, USB-Stick/Gadget-Export | Schritt 6 |
 | `app.py`, `templates/`, `static/` | Web-UI, Workflow, Statusleiste | Schritt 7 |
 
