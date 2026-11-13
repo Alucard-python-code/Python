@@ -9,6 +9,7 @@ auf jedem Entwicklungs-PC.
 
 ```bash
 pip install -r requirements.txt
+HART_SIM=1 python app.py             # komplette Anwendung simuliert -> http://127.0.0.1:8080
 python hart_modem.py                 # Simuliertes Rosemount 3051 identifizieren
 python hart_modem.py fisher_dvc6200  # anderes Szenario
 python battery_bms.py                # 8S-BMS-Simulation inkl. Fehlerfall
@@ -21,9 +22,9 @@ pytest -q                            # Tests der Kernmodule
 ```
 ┌──────────────────────── Chromium Kiosk (Wayland) ─────────────────────────┐
 │  templates/ + static/  ·  responsives 4-Wege-Layout  ·  Statusleiste       │
-└──────────────▲──────────────────────── Socket.IO (Live) / REST ───────────┘
+└──────────────▲────────────────── Server-Sent Events (Live) / REST ────────┘
                │
-┌──────────────┴──────────────────── app.py (Flask + Flask-SocketIO) ───────┐
+┌──────────────┴──────────────────────────── app.py (Flask) ────────────────┐
 │  Workflow-Engine: Auftrag → Identifikation → Fall A/B/C → Kalibrierung    │
 │  ServiceRegistry: startet alle Dienste, verteilt Events an die UI          │
 └─┬──────────┬──────────┬──────────┬──────────┬──────────┬──────────┬──────┘
@@ -61,14 +62,24 @@ hart_modem  battery_  rtc_      feedback_  rotation_  input_    camera_qr
 | `pdf_generator.py` | Auftrags-PDF: Deckblatt mit Summary + Inhaltsverzeichnis, 1 Seite je TAG, Kunden-Rückläufer | ✅ |
 | `dual_usb_export.py` | Dock-Erkennung, Exportpaket mit SHA-256-Manifest, USB-Stick (udisks2) oder PC (g_mass_storage, schreibgeschützt) | ✅ |
 | `demo_data.py` | Beispielauftrag aus den simulierten Geräten (Entwicklung, Schulung, PDF-Vorschau) | ✅ |
-| `app.py`, `templates/`, `static/` | Web-UI, Workflow, Statusleiste | Schritt 7 |
+| `workflow.py` | Ablauf an der Messstelle: HART-/QR-Identifikation, Fall A/B/C, 5-Punkt-Assistent, Etikett | ✅ |
+| `app.py` | Startet alle Dienste, REST-API, Live-Ereignisse per SSE, Shutdown-Verkettung | ✅ |
+| `templates/`, `static/` | Oberfläche: Statusleiste, 6 Ansichten, Overlays (Akku, Statistik, Kamera, Etikett), Bildschirmtastatur, Touch-Sperre, Tastatursteuerung | ✅ |
+
+### Bedienung (Kurzüberblick)
+* **Auftrag** öffnen (Kunde, Auftragsnummer, Prüfer) → bleibt über Neustarts offen.
+* **Gerät**: HART-Scan oder QR-Scan → Fall A/B/C → ggf. Tausch (2 Bestätigungen) bzw. Neuaufnahme.
+* **Kalibrierung**: 5 Punkte, je Punkt „Messpunkt übernehmen“ (wartet auf stabilen True-mA-Wert),
+  optional Referenzwert und Foto; Stellungsregler: „Sollwert anfahren“ (Cmd 40, nur ohne Safe-Mode).
+* **Auftrag abschließen** → Gesamt-PDF; **Export** auf Stick oder als Laufwerk am PC.
+* Tastatur: `Alt+1…6` Ansichten, `Enter` Hauptaktion, `Esc` Dialog/Tastatur schließen.
 
 ### Threading-Modell
 * **HART**: ein `RLock` serialisiert alle Bustransaktionen (Kalibrierung, Live-Werte, Sniffer).
 * **I2C1**: ein gemeinsamer `RLock` in `hw_compat.I2CBus` – BQ76930, INA226, LIS3DH, DS3231 und
   DRV2605L teilen sich den Bus aus verschiedenen Threads.
 * **Dienste** (BMS, Rotation, Input, Telemetrie) laufen als Daemon-Threads und melden über
-  `subscribe()`-Callbacks an `app.py`, das per Socket.IO an die UI weiterreicht.
+  `subscribe()`-Callbacks an `app.py`, das per Server-Sent Events an die UI weiterreicht.
 
 ### Sicherheitskonzept
 * **24/7-Safe-Mode** ist beim Start immer aktiv. Whitelist-Prinzip: im Safe-Mode verlassen nur

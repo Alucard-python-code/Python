@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="color-scheme" content="dark">
+  <title>HART-Communicator</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}?v={{ version }}">
+</head>
+<body class="view-order">
+  <header id="statusbar" aria-label="Statusleiste">
+    <button id="sb-order" class="sb-order" data-view="order" title="Auftrag">
+      <span class="sb-order-no">Kein Auftrag</span><span class="sb-order-cust"></span>
+    </button>
+    <div class="sb-icons">
+      <button id="sb-safe" class="sb-icon" title="24/7-Safe-Mode (Nur-Lesen)"></button>
+      <span id="sb-touch" class="sb-icon hidden" title="Touch gesperrt"></span>
+      <button id="sb-printer" class="sb-icon" title="Etikettendrucker"></button>
+      <button id="sb-dock" class="sb-icon" title="Dock / USB-Export" data-view="export"></button>
+      <button id="sb-torch" class="sb-icon" title="Taschenlampe"></button>
+      <button id="sb-rot" class="sb-icon" title="Display-Drehung sperren"></button>
+      <button id="sb-hours" class="sb-text" title="Betriebsstunden / Statistik"></button>
+      <button id="sb-bat" class="sb-bat" title="Akku – Zellen & Balancer"></button>
+      <span id="sb-time" class="sb-time"></span>
+    </div>
+  </header>
+  <div id="banner" class="banner hidden"></div>
+
+  <nav id="nav" aria-label="Navigation">
+    <button data-view="order"><span class="ico" data-icon="order"></span><span>Auftrag</span></button>
+    <button data-view="device"><span class="ico" data-icon="device"></span><span>Gerät</span></button>
+    <button data-view="cal"><span class="ico" data-icon="cal"></span><span>Kalibrierung</span></button>
+    <button data-view="sniffer"><span class="ico" data-icon="sniffer"></span><span>Bus</span></button>
+    <button data-view="export"><span class="ico" data-icon="usb"></span><span>Export</span></button>
+    <button data-view="settings"><span class="ico" data-icon="settings"></span><span>Optionen</span></button>
+  </nav>
+
+  <main id="main">
+    <section id="view-order" class="view" aria-label="Auftrag"></section>
+    <section id="view-device" class="view" aria-label="Gerät"></section>
+    <section id="view-cal" class="view" aria-label="Kalibrierung"></section>
+    <section id="view-sniffer" class="view" aria-label="Bus-Sniffer"></section>
+    <section id="view-export" class="view" aria-label="Export"></section>
+    <section id="view-settings" class="view" aria-label="Einstellungen"></section>
+  </main>
+
+  <aside id="live" aria-label="Live-Messwerte"></aside>
+
+  <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true">
+    <div class="sheet"><button class="sheet-close" data-close aria-label="Schließen">×</button><div class="sheet-body"></div></div>
+  </div>
+  <div id="osk" class="osk hidden" aria-hidden="true"></div>
+  <div id="toasts" aria-live="polite"></div>
+
+  <script>window.HART = {simulated: {{ 'true' if simulated else 'false' }}, version: "{{ version }}"};</script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
+</body>
+</html>

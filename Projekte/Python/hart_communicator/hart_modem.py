@@ -612,7 +612,7 @@ class SimulatedFieldDevice:
     def __init__(self, profile_key: str, *, poll_address: int = 0, device_id: Optional[int] = None,
                  tag: str = "PT-1001", descriptor: str = "SIMULATION", unit: Optional[int] = None,
                  lrv: float = 0.0, urv: float = 100.0, universal_rev: int = 7,
-                 analog_error_ma: float = 0.0, noise: float = 0.0005):
+                 analog_error_ma: float = 0.0, noise: float = 0.01):
         from device_catalog import get_catalog
         prof = get_catalog().profile(profile_key)
         self.profile = prof
@@ -642,7 +642,8 @@ class SimulatedFieldDevice:
         self.process_percent = pct
 
     def pv(self) -> float:
-        pct = self.process_percent * (1 + random.uniform(-self.noise, self.noise))
+        # Rauschen als fester Anteil der Spanne (σ in %), wie bei realen Transmittern
+        pct = self.process_percent + random.gauss(0, self.noise)
         return self.lrv + (self.urv - self.lrv) * pct / 100.0
 
     def percent_of_range(self) -> float:

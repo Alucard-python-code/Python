@@ -14,8 +14,7 @@
 
 # --- Web-UI / Backend --------------------------------------------------------
 Flask>=3.0,<4
-Flask-SocketIO>=5.3,<6
-simple-websocket>=1.0
+# Live-Daten per Server-Sent Events (im Browser eingebaut) -> keine WebSocket-Bibliothek nötig
 
 # --- HART-Modem (AD5700 an UART) ---------------------------------------------
 pyserial>=3.5
